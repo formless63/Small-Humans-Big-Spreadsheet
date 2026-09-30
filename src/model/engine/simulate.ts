@@ -739,8 +739,14 @@ export function simulateScenario(
       const cutoff = addMonths(date, -5 * 12)
       const eligibleLots = accounts['529'].lots.filter((lot) => lot.date < cutoff)
       const eligibleValue = eligibleLots.reduce((a, lot) => a.plus(lot.value), D(0))
+      const statutoryCapacity =
+        y - Number(s.birthDate.slice(0, 4)) >= 50
+          ? ira.annualRothCap50.value
+          : ira.annualRothCap.value
       const remainingAnnual = nonnegative(
-        D(s.annualRothCapacity).minus(s.annualOtherIraContributions).minus(rothYearUsed),
+        Decimal.min(s.annualRothCapacity, statutoryCapacity)
+          .minus(s.annualOtherIraContributions)
+          .minus(rothYearUsed),
       )
       const compensation = nonnegative(yearlyEarned(date).minus(s.annualOtherIraContributions))
       const amount = Decimal.min(

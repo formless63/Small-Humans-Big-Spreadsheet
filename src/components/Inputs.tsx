@@ -432,7 +432,7 @@ export function Inputs({
                 onChange={(e) => update({ accountOpenedAt: e.target.value })}
               />
             </label>
-            {numeric('annualRothCapacity', 'Annual IRA capacity (2026 reference)', {
+            {numeric('annualRothCapacity', 'Annual unused IRA capacity (capped by law)', {
               step: 500,
               source: 'SRC-IRS-PUB590A',
             })}

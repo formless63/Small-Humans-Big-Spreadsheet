@@ -257,3 +257,18 @@ describe('independent wealth and rounding invariants', () => {
     for (const p of r.education.periods) expect(D(p.unfunded).gte(0)).toBe(true)
   })
 })
+
+it('cannot bypass the annual Roth rollover statutory cap by increasing capacity input', () => {
+  const r = simulateScenario(
+    scenario({
+      share529: 1,
+      educationYears: 0,
+      educationPreset: 'none',
+      rolloverEnabled: true,
+      annualRothCapacity: 100000,
+    }),
+  )
+  for (const e of r.ledger.filter((e) => e.category === 'rollover'))
+    expect(Number(e.amount)).toBeLessThanOrEqual(e.age < 49 ? 7500 : 8600)
+  expect(Number(r.conversions.rollover)).toBeLessThanOrEqual(35000)
+})

@@ -1,5 +1,10 @@
 import { sourced } from '../provenance'
 export const iraRules2026 = {
+  annualRothCap50: sourced(
+    8600,
+    '2026 annual IRA contribution limit for age 50+; held constant in projections',
+    ['SRC-IRS-PUB590A'],
+  ),
   qualifiedRothAge: sourced(59.5, 'Ordinary qualified Roth distribution minimum age', [
     'SRC-IRS-PUB590B',
   ]),
