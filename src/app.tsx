@@ -33,7 +33,7 @@ export function App() {
             `${Math.round(valid.share529 * 100)}/${Math.round((1 - valid.share529) * 100)} split`,
           )
         : null
-    const results = selected ? [a, b, selected] : [a, b]
+    const results = selected ? [selected, a, b] : valid.share529 === 0 ? [b, a] : [a, b]
     for (const r of results) expectFundingToReconcile(r)
     return results
   }, [valid])
@@ -59,9 +59,7 @@ export function App() {
       )
     }
   }
-  const selected =
-    results.find((r) => r.id === 'split') ??
-    results.find((r) => r.id === (scenario.share529 === 0 ? 'trump' : '529'))!
+  const selected = results[0]
   const pending = scenario !== deferred
   return (
     <>
@@ -193,7 +191,9 @@ export function App() {
               </Button>
             </div>
             <p className="comparison-note">
-              Funding policy:{' '}
+              Your selected strategy appears first. The other cards compare the same budget invested
+              entirely in one account; changing the split does not change those comparison
+              scenarios. Funding policy:{' '}
               <strong>
                 {scenario.fundingPolicy === 'minimizeDebt'
                   ? 'Minimize debt — accounts before borrowing'
@@ -202,7 +202,11 @@ export function App() {
               . Same gross parental budget; no extra parent checks after childhood.{' '}
               {pending ? 'Recalculating…' : ''}
             </p>
-            <Results results={results} retirementAge={valid.retirementAge} />
+            <Results
+              results={results}
+              retirementAge={valid.retirementAge}
+              selectedId={selected.id}
+            />
             <Suspense fallback={<p role="status">Loading comparison charts…</p>}>
               <Charts results={results} retirementAge={valid.retirementAge} />
             </Suspense>

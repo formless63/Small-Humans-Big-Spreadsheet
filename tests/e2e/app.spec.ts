@@ -1,6 +1,46 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
 
+test('selected strategy follows split controls and recalculates other assumptions', async ({
+  page,
+}) => {
+  await page.goto('./')
+  const selected = page.locator('.result-card[data-selected="true"]')
+  await expect(selected.getByRole('heading')).toHaveText('50/50 split')
+  const initial = await selected.locator('.big-number').textContent()
+  const baseline529 = await page
+    .locator('.result-card')
+    .filter({ has: page.getByRole('heading', { name: '529 plan', exact: true }) })
+    .locator('.big-number')
+    .textContent()
+  await page.getByRole('button', { name: '75% 529 / 25% Trump', exact: true }).click()
+  await expect(selected.getByRole('heading')).toHaveText('75/25 split')
+  await expect(selected.locator('.big-number')).not.toHaveText(initial!)
+  await expect(page.locator('.result-card').first()).toHaveAttribute('data-selected', 'true')
+  await expect(page.locator('.result-card').nth(1).locator('.big-number')).toHaveText(baseline529!)
+  const seventyFive = await selected.locator('.big-number').textContent()
+  await page.getByLabel('529 contribution share').fill('25')
+  await expect(selected.getByRole('heading')).toHaveText('25/75 split')
+  await expect(selected.locator('.big-number')).not.toHaveText(seventyFive!)
+  await page.getByRole('button', { name: '100% Trump Account', exact: true }).click()
+  await expect(selected.getByRole('heading')).toHaveText('Trump Account')
+  await page.getByRole('button', { name: '100% 529', exact: true }).click()
+  await expect(selected.getByRole('heading')).toHaveText('529 plan')
+  for (const [label, value] of [
+    ['Annual parent contribution', '10000'],
+    ['Real investment return', '6'],
+    ['Retirement age', '60'],
+  ]) {
+    const before = await selected.locator('.big-number').textContent()
+    await page.getByLabel(label).fill(value)
+    await expect(selected.locator('.big-number')).not.toHaveText(before!)
+  }
+  await page.getByText('Advanced assumptions', { exact: false }).first().click()
+  const before = await selected.locator('.big-number').textContent()
+  await page.getByLabel('Annual tuition & fees').fill('20000')
+  await expect(selected.locator('.big-number')).not.toHaveText(before!)
+})
+
 test('static app works, changes presets, exposes math and sources, shares deterministically', async ({
   page,
 }) => {

@@ -3,9 +3,11 @@ import type { SimulationResult } from '../model/types'
 export function Results({
   results,
   retirementAge,
+  selectedId,
 }: {
   results: SimulationResult[]
   retirementAge: number
+  selectedId: string
 }) {
   const rows: [string, (r: SimulationResult) => string][] = [
     ['Parent contributions', (r) => currency(r.contributions.parent)],
@@ -62,7 +64,14 @@ export function Results({
     <>
       <div className={`result-grid columns-${results.length}`}>
         {results.map((r, i) => (
-          <article className={`result-card strategy-${i}`} key={r.id}>
+          <article
+            className={`result-card strategy-${i}`}
+            data-selected={r.id === selectedId}
+            key={r.id}
+          >
+            <p className="strategy-role">
+              {r.id === selectedId ? 'Your selected strategy' : 'Single-account comparison'}
+            </p>
             <div className="strategy-title">
               <span className="dot" />
               <h3>{r.name}</h3>

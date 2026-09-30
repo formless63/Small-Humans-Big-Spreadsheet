@@ -627,6 +627,15 @@ legend > span {
   align-items: center;
   gap: 9px;
 }
+.strategy-role {
+  color: #52674f;
+  font-size: 11px;
+  font-weight: 600;
+  margin: 0 0 12px;
+}
+.result-card[data-selected="true"] {
+  background: #f0f5ed;
+}
 .strategy-title h3 {
   font-family: Arial, Helvetica, sans-serif;
   font-size: 12px;
