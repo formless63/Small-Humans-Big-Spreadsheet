@@ -1,6 +1,6 @@
 # Small Humans, Big Spreadsheet
 
-A private, static financial calculator that traces childhood contributions through education, taxes, loans, Roth strategies and retirement. Compare a 529, Trump Account, and editable split without unexplained funding.
+A private, static financial calculator that traces childhood contributions through education, taxes, loans, Roth strategies and retirement. Compare education savings, Trump Accounts, parent brokerage, custodial investments, cash, child Roth and parent retirement strategies without unexplained funding. Start with guided questions or edit every assumption on the same page.
 
 ## Develop
 

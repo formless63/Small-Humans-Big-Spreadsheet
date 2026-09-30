@@ -1,12 +1,14 @@
 import { ArrowDown, ArrowUpRight, Check, Copy, RotateCcw, Sprout } from 'lucide-react'
 import { lazy, Suspense, useDeferredValue, useEffect, useMemo, useState } from 'react'
+import { GuidedSetup } from './components/GuidedSetup'
 import { Inputs } from './components/Inputs'
 import { Ledger } from './components/Ledger'
 import { Methodology } from './components/Methodology'
+import { PlanningResults } from './components/PlanningResults'
 import { Results } from './components/Results'
 import { Button } from './components/ui/button'
 import { decodeScenario, encodeScenario } from './lib/queryState'
-import { expectFundingToReconcile, simulateScenario } from './model/engine/simulate'
+import { usePlanCalculation } from './lib/usePlanCalculation'
 import { defaultScenario, type Scenario, scenarioSchema } from './scenarios/schema'
 
 const Charts = lazy(() => import('./components/Charts').then((m) => ({ default: m.Charts })))
@@ -14,29 +16,14 @@ const initial = decodeScenario(window.location.search)
 export function App() {
   const [scenario, setScenario] = useState<Scenario>(initial.scenario),
     [shareStatus, setShareStatus] = useState(''),
-    [urlError, setUrlError] = useState(initial.error)
+    [urlError, setUrlError] = useState(initial.error),
+    [inputView, setInputView] = useState<'guided' | 'all'>('guided')
   const deferred = useDeferredValue(scenario)
   const parsed = useMemo(() => scenarioSchema.safeParse(deferred), [deferred])
   const valid = parsed.success ? parsed.data : defaultScenario
-  const results = useMemo(() => {
-    const a = simulateScenario(
-      { ...valid, share529: 1, employerAnnual: 0, pilotEnabled: false },
-      '529',
-      '529 plan',
-    )
-    const b = simulateScenario({ ...valid, share529: 0 }, 'trump', 'Trump Account')
-    const selected =
-      valid.share529 > 0 && valid.share529 < 1
-        ? simulateScenario(
-            valid,
-            'split',
-            `${Math.round(valid.share529 * 100)}/${Math.round((1 - valid.share529) * 100)} split`,
-          )
-        : null
-    const results = selected ? [selected, a, b] : valid.share529 === 0 ? [b, a] : [a, b]
-    for (const r of results) expectFundingToReconcile(r)
-    return results
-  }, [valid])
+  const plan = usePlanCalculation(valid)
+  const results = plan.calculation?.results ?? []
+  const computedScenario = plan.calculation?.scenario ?? valid
   useEffect(() => {
     const restore = () => {
       const next = decodeScenario(window.location.search)
@@ -60,7 +47,7 @@ export function App() {
     }
   }
   const selected = results[0]
-  const pending = scenario !== deferred
+  const pending = scenario !== deferred || plan.pending
   return (
     <>
       <header className="site-header" id="top">
@@ -79,7 +66,7 @@ export function App() {
           <a href="#methodology">
             Methodology & sources <ArrowUpRight size={13} />
           </a>
-          <Button variant="outline" size="sm" onClick={share}>
+          <Button variant="outline" size="sm" onClick={share} disabled={pending || !parsed.success}>
             <Copy size={14} /> Copy scenario link
           </Button>
         </nav>
@@ -157,20 +144,56 @@ export function App() {
           </p>
         )}
         <div id="scenario">
-          <Inputs
-            scenario={scenario}
-            update={(changes) => {
-              setScenario((s) => ({ ...s, ...changes }))
-              setShareStatus('')
-              setUrlError(undefined)
-            }}
-          />
+          <fieldset className="input-mode">
+            <legend className="sr-only">Input view</legend>
+            <button
+              type="button"
+              aria-pressed={inputView === 'guided'}
+              onClick={() => setInputView('guided')}
+            >
+              Guided questions
+            </button>
+            <button
+              type="button"
+              aria-pressed={inputView === 'all'}
+              onClick={() => setInputView('all')}
+            >
+              Edit all assumptions
+            </button>
+          </fieldset>
+          {inputView === 'guided' ? (
+            <GuidedSetup
+              scenario={scenario}
+              update={(changes) => {
+                setScenario((s) => ({ ...s, ...changes }))
+                setShareStatus('')
+                setUrlError(undefined)
+              }}
+              editAll={() => setInputView('all')}
+            />
+          ) : (
+            <Inputs
+              scenario={scenario}
+              update={(changes) => {
+                setScenario((s) => ({ ...s, ...changes }))
+                setShareStatus('')
+                setUrlError(undefined)
+              }}
+            />
+          )}
         </div>
+        {plan.error && (
+          <p className="error" role="alert">
+            {plan.error}
+          </p>
+        )}
         {!parsed.success ? (
           <p className="error" role="alert">
             Please correct these inputs:{' '}
             {parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}
           </p>
+        ) : !selected ? (
+          <p role="status">Calculating your comparison…</p>
         ) : (
           <section id="comparison" className="comparison" aria-busy={pending}>
             <div className="section-heading">
@@ -192,24 +215,34 @@ export function App() {
             </div>
             <p className="comparison-note">
               Your selected strategy appears first. The other cards compare the same budget invested
-              entirely in one account; changing the split does not change those comparison
-              scenarios. Funding policy:{' '}
+              in each alternative account. Changes to your selected allocation affect the selected
+              strategy; the reference allocations stay fixed. Funding policy:{' '}
               <strong>
                 {scenario.fundingPolicy === 'minimizeDebt'
                   ? 'Minimize debt — accounts before borrowing'
                   : 'Preserve retirement — federal borrowing before accounts'}
               </strong>
-              . Same gross parental budget; no extra parent checks after childhood.{' '}
-              {pending ? 'Recalculating…' : ''}
+              .{' '}
+              {computedScenario.comparisonMode === 'gross'
+                ? 'Same gross parental budget'
+                : 'Same net parental budget after contribution incentives'}
+              ; no extra parent checks after childhood. {pending ? 'Recalculating…' : ''}
             </p>
             <Results
               results={results}
-              retirementAge={valid.retirementAge}
+              retirementAge={computedScenario.retirementAge}
               selectedId={selected.id}
             />
             <Suspense fallback={<p role="status">Loading comparison charts…</p>}>
-              <Charts results={results} retirementAge={valid.retirementAge} />
+              <Charts results={results} retirementAge={computedScenario.retirementAge} />
             </Suspense>
+            <PlanningResults
+              scenario={computedScenario}
+              selected={selected}
+              results={results}
+              sensitivity={plan.calculation?.sensitivity ?? []}
+              family={plan.calculation?.family ?? []}
+            />
             <Ledger results={results} />
             <Methodology result={selected} />
           </section>

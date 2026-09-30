@@ -1,11 +1,19 @@
 import { iraRules2026 as ira } from '../../data/federal/ira2026'
 import { loanRules2026 as federal } from '../../data/federal/studentLoans2026'
-import { nyRules2026 as ny } from '../../data/states/ny2026'
 import { type ExpenseKey, expenseKeys } from '../../scenarios/presets'
 import { type Scenario, scenarioSchema } from '../../scenarios/schema'
+import { assetAssessment, educationCredit } from '../policies/education'
+import { allocationAt, grossForNetBudget, stateBenefit } from '../policies/strategies'
 import { incomeTax, kiddieApplies, type TaxContext } from '../taxes/ordinaryIncome'
 import type { FundingPeriod, LedgerEvent, SimulationResult, TimelinePoint } from '../types'
-import { amortizingPayment, type LoanState, originateLoan, tickLoan } from '../vehicles/loans'
+import { parentAgeAt } from '../vehicles/flexible'
+import {
+  amortizingPayment,
+  extraLoanPayment,
+  type LoanState,
+  originateLoan,
+  tickLoan,
+} from '../vehicles/loans'
 import {
   type Account,
   accrue,
@@ -24,18 +32,80 @@ export function simulateScenario(
   id = 'custom',
   name = 'Custom strategy',
 ): SimulationResult {
-  const s = scenarioSchema.parse(raw)
+  const parsedScenario = scenarioSchema.parse(raw)
+  const s = {
+    ...parsedScenario,
+    nyEnabled: parsedScenario.nyEnabled && parsedScenario.state529Mode === 'ny',
+  }
   const accounts = {
     '529': createAccount('529'),
     trump: createAccount('trump'),
     roth: createAccount('roth'),
+    brokerage: createAccount('brokerage'),
+    custodial: createAccount('custodial'),
+    cash: createAccount('cash'),
+    childRoth: createAccount('childRoth'),
+    wageRoth: createAccount('wageRoth'),
+    parentRoth: createAccount('parentRoth'),
   }
   const ledger: LedgerEvent[] = [],
     timeline: TimelinePoint[] = [],
     periods: FundingPeriod[] = [],
     loans: LoanState[] = []
   const warnings = new Set<string>()
-  const monthly = monthlyRate(s.annualReturn)
+  const aidAssessment: SimulationResult['aidAssessment'] = []
+  const iraWorksheets: SimulationResult['iraWorksheets'] = []
+  const allBalances = () => Object.values(accounts).reduce((sum, a) => sum.plus(a.balance), D(0))
+  let stateYearCredit = D(0),
+    parentRothYearUsed = D(0),
+    childEarnedContributions = D(0),
+    investmentTaxes = D(0),
+    credits = D(0),
+    creditExpenses = D(0),
+    creditYears = 0
+  let assessedYear = -1,
+    assessedReduction = D(0),
+    shockApplied = false,
+    previousAge = ageAt(s.asOf, s.birthDate)
+  let iraReviewCarry = D(s.outsideIraBasis)
+  let iraYearBasis = D(0),
+    iraYearDistributions = D(0),
+    iraYearPlanningTaxable = D(0)
+  const settleYear = () => {
+    if (year < 0) return
+    const credit = educationCredit(s, creditExpenses, creditYears)
+    credits = credits.plus(credit)
+    if (creditExpenses.gt(0)) creditYears++
+    if (credit.gt(0))
+      log(
+        `${year}-12-31`,
+        'benefit',
+        credit,
+        'Conservative nonrefundable education credit, limited by reserved eligible expenses, MAGI phaseout, confirmed eligibility and available tax liability; not deposited in child accounts.',
+        { payer: 'parent tax return', sourceIds: ['SRC-IRS-PUB970'] },
+      )
+    if (iraYearDistributions.gt(0)) {
+      const value = accounts.trump.balance.plus(s.outsideIraYearEndValue)
+      const denominator = value.plus(iraYearDistributions)
+      const nontaxable = denominator.isZero()
+        ? D(0)
+        : Decimal.min(iraYearDistributions, iraYearDistributions.mul(iraYearBasis).div(denominator))
+      iraReviewCarry = nonnegative(iraYearBasis.minus(nontaxable))
+      iraWorksheets.push({
+        year,
+        basisAvailable: str(iraYearBasis),
+        distributionAndConversion: str(iraYearDistributions),
+        yearEndValue: str(value),
+        nontaxable: str(nontaxable),
+        taxable: str(iraYearDistributions.minus(nontaxable)),
+        planningTaxable: str(iraYearPlanningTaxable),
+      })
+    } else iraReviewCarry = iraYearBasis
+  }
+  const monthly = monthlyRate(s.annualReturn),
+    glideMonthly = monthlyRate(s.glideReturn),
+    cashMonthly = monthlyRate(s.cashReturn),
+    dividendMonthly = monthlyRate(s.dividendYield)
   const start = addMonths(s.asOf, 1),
     retirementDate = atAge(s.birthDate, s.retirementAge)
   const educationStart = atAge(s.birthDate, s.educationStartAge),
@@ -116,7 +186,16 @@ export function simulateScenario(
       : retirementStart > `${y}-12-01`
         ? 13
         : 1
-    return income.mul(13 - begin).div(12)
+    let schoolWages = D(0)
+    for (let m = 1; m <= 12; m++) {
+      const month = `${y}-${String(m).padStart(2, '0')}-01`
+      if (month >= atAge(s.birthDate, s.childEmploymentAge) && month < retirementStart)
+        schoolWages = schoolWages.plus(D(s.childEmploymentAnnual).div(12))
+    }
+    return income
+      .mul(13 - begin)
+      .div(12)
+      .plus(schoolWages)
   }
   const taxContext = (date: string, conversion = false): TaxContext => ({
     scenario: s,
@@ -143,6 +222,9 @@ export function simulateScenario(
     'All amounts are real 2026 dollars. Statutory dollar caps and reference loan rates are held constant; future law, indexing, costs, and aid may differ.',
   )
   warnings.add(
+    'Investment taxes apply to modeled real-dollar income/gains and constant reference thresholds. Inflation-aware nominal tax basis and future tax returns are not simulated; effective rates are planning inputs.',
+  )
+  warnings.add(
     'Monthly transactions occur at month boundaries, beginning next month. Effective annual investment returns convert geometrically; loan interest uses annual rate / 12.',
   )
   if (s.taxMode === 'manual')
@@ -152,6 +234,39 @@ export function simulateScenario(
   else
     warnings.add(
       '2026 single-filer federal tax estimate: dependent standard deduction and simplified Form 8615 parent-rate treatment. Siblings, credits, itemized deductions, state IRA tax, and other IRA balances are excluded; use manual rates for complex cases.',
+    )
+  warnings.add(
+    'Parent-owned brokerage remains parent-controlled; its after-tax value is earmarked for education/child future, not an automatic legal gift. Parent Roth retirement assets and retained family 529 savings are reported separately.',
+  )
+  if (s.compareVehicles.includes('custodial') || s.strategyVehicle === 'custodial')
+    warnings.add(
+      'UTMA/UGMA assets irrevocably belong to the child; transfer of control depends on state law. Effective child capital-gains/dividend rates must include preferential-rate kiddie-tax treatment when applicable; tax-loss harvesting and full Schedule D are not modeled.',
+    )
+  if (s.aidMode === 'assetImpact')
+    warnings.add(
+      'Aid assessment models the dependent-student asset component using current 2026–27 rules only. It is not a complete SAI, Pell or award calculator: income, asset exemptions/protection, prior-prior-year withdrawal income, dependency and school methodology require separate review. Trump Account future treatment is an explicit user assumption. Award response and institutional rates are assumptions; no award reduction is assumed by default.',
+    )
+  if (s.creditMode !== 'none')
+    warnings.add(
+      'Education credits require user-confirmed eligibility, MAGI and tax liability. Reserved tuition is not withdrawn tax-free from a 529. Credits are a separate parent-side benefit, never free tuition cash. Refundable AOTC, scholarship reallocation and full tax-return interactions are not simulated.',
+    )
+  if (s.state529Mode === 'custom')
+    warnings.add(
+      'Other-state deduction/credit caps, rates and proportional benefit recapture are user-supplied assumptions; verify the selected state and plan rules. NY rules do not apply to this custom state layer.',
+    )
+  if (s.leftover529 === 'family')
+    warnings.add(
+      s.familyTransferEligible
+        ? 'Unused 529 funds remain a restricted family education asset; no liquidation tax is applied to an unexecuted distribution. A same-generation eligible-family beneficiary change is assumed; funds are not counted as unrestricted child retirement cash.'
+        : 'Family retention requires confirmation of an eligible same-generation beneficiary change; liquidation is used until confirmed.',
+    )
+  if (s.strategyVehicle === 'childRoth' || s.compareVehicles.includes('childRoth'))
+    warnings.add(
+      'A child Roth contribution needs eligible compensation and unused IRA capacity. Parental gifts may fund contributions but do not create compensation; rejected contributions are shown. Wage-funded saving is reported separately.',
+    )
+  if (s.strategyVehicle === 'parentRoth' || s.compareVehicles.includes('parentRoth'))
+    warnings.add(
+      'Parent Roth funding requires user-confirmed direct-contribution income eligibility and eligible compensation. Annual IRA limits include other IRA contributions. This models a Roth IRA, not deductible traditional IRA or workplace-plan contributions.',
     )
   if (s.gapEnabled)
     warnings.add('Illustrative gap financing; real-world availability and rates may differ.')
@@ -178,7 +293,14 @@ export function simulateScenario(
     const age = ageAt(date, s.birthDate),
       y = Number(date.slice(0, 4))
     if (y !== year) {
+      settleYear()
       year = y
+      stateYearCredit = D(0)
+      parentRothYearUsed = D(0)
+      creditExpenses = D(0)
+      iraYearBasis = iraReviewCarry
+      iraYearDistributions = D(0)
+      iraYearPlanningTaxable = D(0)
       trumpYearContributions = D(0)
       nyYearDeduction = D(0)
       rothYearUsed = D(0)
@@ -186,7 +308,7 @@ export function simulateScenario(
       penaltyExceptionUsed = D(0)
     }
     if (!captured18 && age >= 18) {
-      age18 = accounts['529'].balance.plus(accounts.trump.balance).plus(accounts.roth.balance)
+      age18 = allBalances()
       captured18 = true
     }
     if (!capturedGrad && date >= educationEnd) {
@@ -201,22 +323,46 @@ export function simulateScenario(
         traditional: str(accounts.trump.balance),
         roth: str(accounts.roth.balance),
         debt: str(loanBalance()),
-        career: str(career),
+        career: str(career.plus(accounts.wageRoth.balance)),
+        flexible: str(
+          accounts.brokerage.balance
+            .plus(accounts.custodial.balance)
+            .plus(accounts.cash.balance)
+            .plus(accounts.childRoth.balance),
+        ),
+        parentRetirement: str(accounts.parentRoth.balance),
       })
       break
     }
     const annualSalary = annualIncome(date),
-      incomeCash = annualSalary.div(12)
+      incomeCash = annualSalary
+        .div(12)
+        .plus(
+          date >= atAge(s.birthDate, s.childEmploymentAge) && date < retirementStart
+            ? D(s.childEmploymentAnnual).div(12)
+            : 0,
+        )
     let cashUsed = D(0)
     // Contributions are the only parental cash flows. Benefit stays outside the accounts.
     if (date < parentEnd) {
-      const scheduled =
+      const allocation = allocationAt(s, age)
+      const scheduledBudget =
         s.contributionFrequency === 'monthly'
           ? D(s.annualContribution).div(12)
           : date === start || date.endsWith('-01-01')
             ? D(s.annualContribution)
             : D(0)
-      const to529 = scheduled.mul(s.share529)
+      const share529 = allocation
+        .filter((v) => v.vehicle === '529')
+        .reduce((sum, v) => sum + v.share, 0)
+      const scheduled = grossForNetBudget(
+        s,
+        scheduledBudget,
+        share529,
+        nyYearDeduction,
+        stateYearCredit,
+      )
+      const to529 = scheduled.mul(share529)
       if (to529.gt(0)) {
         contribute(accounts['529'], to529, date)
         parent = parent.plus(to529)
@@ -226,29 +372,29 @@ export function simulateScenario(
           payer: 'parent',
           basis: str(to529),
         })
-        if (s.nyEnabled) {
-          const deduction = Decimal.min(
-            to529,
-            nonnegative(
-              D(s.nyJoint ? ny.jointDeduction.value : ny.individualDeduction.value).minus(
-                nyYearDeduction,
-              ),
-            ),
-          )
-          nyYearDeduction = nyYearDeduction.plus(deduction)
-          accounts['529'].nyDeductions = accounts['529'].nyDeductions.plus(deduction)
-          const benefit = deduction.mul(s.nyTaxRate)
-          benefits = benefits.plus(benefit)
+        const incentive = stateBenefit(s, to529, nyYearDeduction, stateYearCredit)
+        nyYearDeduction = nyYearDeduction.plus(incentive.deduction)
+        stateYearCredit = stateYearCredit.plus(incentive.credit)
+        accounts['529'].nyDeductions = accounts['529'].nyDeductions.plus(incentive.deduction)
+        accounts['529'].stateBenefits = accounts['529'].stateBenefits.plus(incentive.benefit)
+        benefits = benefits.plus(incentive.benefit)
+        if (incentive.benefit.gt(0))
           log(
             date,
             'benefit',
-            benefit,
-            'Parent-side NY contribution subtraction value; not reinvested.',
-            { payer: 'parent tax return', sourceIds: ['SRC-NY-IT201'] },
+            incentive.benefit,
+            s.comparisonMode === 'net'
+              ? 'State incentive supports a larger gross deposit at the same net parental cost; same-year refund availability is a planning assumption.'
+              : 'Parent-side state incentive; not reinvested.',
+            {
+              payer: 'parent tax return',
+              sourceIds: s.state529Mode === 'ny' ? ['SRC-NY-IT201'] : [],
+            },
           )
-        }
       }
-      const requested = scheduled.mul(D(1).minus(s.share529))
+      const requested = scheduled.mul(
+        allocation.filter((v) => v.vehicle === 'trump').reduce((sum, v) => sum + v.share, 0),
+      )
       const eligible =
         date >= monthDate(ira.contributionStart.value) &&
         date >= '2026-07-04' &&
@@ -263,6 +409,7 @@ export function simulateScenario(
         contribute(accounts.trump, toTrump, date)
         trumpYearContributions = trumpYearContributions.plus(toTrump)
         parent = parent.plus(toTrump)
+        iraYearBasis = iraYearBasis.plus(toTrump)
         log(
           date,
           'contribution',
@@ -278,7 +425,11 @@ export function simulateScenario(
         )
       }
       rejected = rejected.plus(requested.minus(toTrump))
-      if (eligible && s.employerAnnual > 0) {
+      if (
+        eligible &&
+        allocation.some((v) => v.vehicle === 'trump' && v.share > 0) &&
+        s.employerAnnual > 0
+      ) {
         const employer = Decimal.min(
           D(s.employerAnnual).div(12),
           nonnegative(D(ira.trumpAnnualLimit.value).minus(trumpYearContributions)),
@@ -301,11 +452,68 @@ export function simulateScenario(
           )
         }
       }
+      for (const part of allocation.filter((v) => !['529', 'trump'].includes(v.vehicle))) {
+        const wanted = scheduled.mul(part.share),
+          account = accounts[part.vehicle]
+        let accepted = wanted
+        if (part.vehicle === 'childRoth') {
+          accepted = Decimal.min(
+            wanted,
+            nonnegative(
+              D(ira.annualRothCap.value).minus(s.annualOtherIraContributions).minus(rothYearUsed),
+            ),
+            nonnegative(
+              yearlyEarned(date).minus(s.annualOtherIraContributions).minus(rothYearUsed),
+            ),
+          )
+          rothYearUsed = rothYearUsed.plus(accepted)
+        }
+        if (part.vehicle === 'parentRoth') {
+          const cap =
+            parentAgeAt(s, `${y}-12-31`) >= 50 ? ira.annualRothCap50.value : ira.annualRothCap.value
+          accepted = s.parentRothEligible
+            ? Decimal.min(
+                wanted,
+                nonnegative(
+                  D(cap)
+                    .minus(s.parentOtherIraContributions)
+                    .mul(s.householdBudgetShare)
+                    .minus(parentRothYearUsed),
+                ),
+                nonnegative(
+                  D(s.parentCompensation)
+                    .minus(s.parentOtherIraContributions)
+                    .mul(s.householdBudgetShare)
+                    .minus(parentRothYearUsed),
+                ),
+              )
+            : D(0)
+          parentRothYearUsed = parentRothYearUsed.plus(accepted)
+        }
+        if (accepted.gt(0)) {
+          contribute(account, accepted, date)
+          parent = parent.plus(accepted)
+          log(
+            date,
+            'contribution',
+            accepted,
+            'Scheduled parent contribution to the selected account. Ownership and IRA compensation/cap restrictions remain distinct.',
+            {
+              vehicleId: account.id,
+              payer: 'parent',
+              basis: str(accepted),
+              balance: str(account.balance),
+              sourceIds: vehicleRegistry[account.id].sourceIds,
+            },
+          )
+        }
+        rejected = rejected.plus(wanted.minus(accepted))
+      }
     }
     if (
       s.pilotEnabled &&
       !pilotAdded &&
-      s.share529 < 1 &&
+      allocationAt(s, age).some((v) => v.vehicle === 'trump' && v.share > 0) &&
       pilotEligible(s.birthDate) &&
       date >= '2026-07-04' &&
       date < trumpAvailableFrom(s.birthDate)
@@ -326,17 +534,82 @@ export function simulateScenario(
         },
       )
     }
+    const investedRate =
+      s.glidePath && age >= s.glideStartAge && date < educationEnd ? glideMonthly : monthly
+    const shock = s.shockEnabled && !shockApplied && previousAge < s.shockAge && age >= s.shockAge
     for (const account of Object.values(accounts)) {
-      const growth = accrue(account, monthly)
+      if (account.balance.isZero()) continue
+      const rate = account.id === 'cash' ? cashMonthly : investedRate
+      let growth = D(0),
+        drag = D(0)
+      if (['brokerage', 'custodial'].includes(account.id)) {
+        const dividend = account.balance.mul(dividendMonthly)
+        growth = accrue(account, rate.minus(dividendMonthly))
+        const effective =
+          (account.id === 'brokerage' ? s.parentCapitalGainsRate : s.childCapitalGainsRate) +
+          s.stateInvestmentTaxRate
+        drag = dividend.mul(effective)
+        contribute(account, nonnegative(dividend.minus(drag)), date)
+        growth = growth.plus(dividend)
+        // Proportional sales need one long-term cohort plus recent dated lots, not
+        // hundreds of separate old dividend reinvestments with identical tax treatment.
+        const cutoff = addMonths(date, -12)
+        const old = account.lots.filter((l) => l.date < cutoff)
+        if (old.length > 1)
+          account.lots = [
+            {
+              date: old[0].date,
+              value: old.reduce((v, l) => v.plus(l.value), D(0)),
+              basis: old.reduce((v, l) => v.plus(l.basis), D(0)),
+            },
+            ...account.lots.filter((l) => l.date >= cutoff),
+          ]
+      } else {
+        growth = accrue(account, rate)
+        if (account.id === 'cash') {
+          drag = nonnegative(growth).mul(
+            s.parentOrdinaryRate + (s.cashKind === 'treasury' ? 0 : s.stateInvestmentTaxRate),
+          )
+          remove(account, drag)
+          account.basis = account.balance
+        }
+      }
       if (!growth.isZero())
         log(
           date,
           'growth',
           growth,
-          'Monthly effective compounding from annual investment-return assumption.',
+          'Monthly total return; taxable reinvested distributions increase basis. Cash uses its separate return assumption.',
           { vehicleId: account.id, balance: str(account.balance) },
         )
+      if (drag.gt(0)) {
+        investmentTaxes = investmentTaxes.plus(drag)
+        log(
+          date,
+          'tax',
+          drag,
+          'Investment income tax withheld from interest/dividends, not paid by an extra parent contribution.',
+          {
+            vehicleId: account.id,
+            payer: 'investment income',
+            tax: str(drag),
+            sourceIds: ['SRC-IRS-PUB550', 'SRC-IRS-8615'],
+          },
+        )
+      }
+      if (shock && account.id !== 'cash') {
+        const change = accrue(account, D(s.shockReturn))
+        log(
+          date,
+          'growth',
+          change,
+          'One-time adverse-return stress scenario; an assumption, not a forecast.',
+          { vehicleId: account.id, balance: str(account.balance) },
+        )
+      }
     }
+    if (shock) shockApplied = true
+    previousAge = age
     const careerGrowth = career.mul(monthly)
     career = career.plus(careerGrowth)
     if (!careerGrowth.isZero())
@@ -381,6 +654,39 @@ export function simulateScenario(
             payer: 'child earnings',
             balance: str(loan.balance.plus(loan.accrued)),
           },
+        )
+      }
+    }
+    let extraBudget = Decimal.min(
+      D(s.extraDebtPayment),
+      nonnegative(incomeCash.minus(monthlyPayments)),
+    )
+    const repaymentOrder = [...loans]
+      .filter((l) => l.started && !l.payoffDate)
+      .sort((a, b) =>
+        s.extraDebtOrder === 'highestRate'
+          ? b.annualRate - a.annualRate
+          : s.extraDebtOrder === 'federalFirst'
+            ? a.kind === 'federal'
+              ? -1
+              : 1
+            : a.kind === 'gap'
+              ? -1
+              : 1,
+      )
+    for (const loan of repaymentOrder) {
+      const paid = extraLoanPayment(loan, extraBudget)
+      if (paid.gt(0)) {
+        extraBudget = extraBudget.minus(paid)
+        monthlyPayments = monthlyPayments.plus(paid)
+        if (loan.kind === 'federal') federalPaymentsThisMonth = federalPaymentsThisMonth.plus(paid)
+        if (loan.balance.plus(loan.accrued).lt('0.00000001')) loan.payoffDate = date
+        log(
+          date,
+          'loan-payment',
+          paid,
+          'Extra principal payment funded from available modeled child gross earnings; reduces career saving capacity.',
+          { vehicleId: loan.id, payer: 'child earnings', balance: str(loan.balance) },
         )
       }
     }
@@ -430,7 +736,28 @@ export function simulateScenario(
       const academicYear = Math.floor(monthIndex / 12)
       const costs = expenseKeys.map((key) => ({ key, expense: money(D(s.expenses[key]).div(12)) }))
       const cost = costs.reduce((a, c) => a.plus(c.expense), D(0))
-      const aid = Decimal.min(cost, money(D(s.annualAid).div(12)))
+      if (s.aidMode === 'assetImpact' && academicYear !== assessedYear) {
+        assessedYear = academicYear
+        const assessment = assetAssessment(s, accounts)
+        assessedReduction = assessment.reduction
+        aidAssessment.push({
+          date,
+          federalAssetContribution: str(assessment.federal),
+          institutionAssetContribution: str(assessment.institution),
+          modeledAidReduction: str(Decimal.min(s.annualAid, assessment.reduction)),
+        })
+        log(
+          date,
+          'valuation',
+          assessment.federal,
+          'Current-year dependent FAFSA asset component sensitivity, not a full SAI or grant award. Institutional formula and award response are user assumptions.',
+          { sourceIds: ['SRC-FSA-ASSETS2026', 'SRC-FSA-SAI2026'] },
+        )
+      }
+      const aid = Decimal.min(
+        cost,
+        money(nonnegative(D(s.annualAid).minus(assessedReduction)).div(12)),
+      )
       const child = Decimal.min(cost.minus(aid), money(D(s.annualChildEducation).div(12)))
       cashUsed = cashUsed.plus(child)
       if (child.gt(incomeCash))
@@ -511,14 +838,35 @@ export function simulateScenario(
         const isQualified =
           s.eligibleInstitution && ['tuition', 'books', 'computer', 'roomBoard'].includes(key)
         const qualified = isQualified && (key !== 'roomBoard' || s.halfTime)
-        const qualifiedAmount =
+        let qualifiedAmount =
           key === 'roomBoard' ? Decimal.min(needed, D(s.roomBoardQualifiedLimit).div(12)) : needed
+        if (
+          account.id === '529' &&
+          s.creditMode !== 'none' &&
+          s.creditEligible &&
+          ['tuition', 'books'].includes(key)
+        )
+          qualifiedAmount = nonnegative(
+            qualifiedAmount.minus(
+              D(s.creditReserveAnnual)
+                .div(12)
+                .mul(key === 'books' ? 0 : 1),
+            ),
+          )
         let net = D(0)
         for (const [want, qualify] of [
           [qualifiedAmount, qualified],
           [needed.minus(qualifiedAmount), false],
         ] as const) {
           if (want.lte(0)) continue
+          if (
+            account.id === '529' &&
+            !qualify &&
+            key === 'tuition' &&
+            s.creditMode !== 'none' &&
+            s.creditEligible
+          )
+            continue
           const exemption =
             account.id === '529' && !qualify
               ? nonnegative(D(s.annual529PenaltyException).minus(penaltyExceptionUsed))
@@ -533,7 +881,12 @@ export function simulateScenario(
           net = net.plus(w.net)
           taxes = taxes.plus(w.tax).plus(w.stateRecapture)
           penalties = penalties.plus(w.penalty)
-          unearned = unearned.plus(w.taxable)
+          if (['529', 'trump', 'custodial', 'childRoth', 'wageRoth'].includes(account.id))
+            unearned = unearned.plus(w.taxable)
+          if (account.id === 'trump') {
+            iraYearDistributions = iraYearDistributions.plus(w.gross)
+            iraYearPlanningTaxable = iraYearPlanningTaxable.plus(w.taxable)
+          }
           log(
             date,
             'withdrawal',
@@ -567,10 +920,46 @@ export function simulateScenario(
           need = need.minus(amount)
           fromFederal = fromFederal.plus(amount)
         }
-        for (const account of [accounts['529'], accounts.trump]) {
+        const orders = {
+          educationFirst: [
+            '529',
+            'brokerage',
+            'cash',
+            'custodial',
+            'trump',
+            'childRoth',
+            'wageRoth',
+            'parentRoth',
+          ],
+          flexibleFirst: [
+            'brokerage',
+            'cash',
+            'custodial',
+            '529',
+            'trump',
+            'childRoth',
+            'wageRoth',
+            'parentRoth',
+          ],
+          retirementFirst: [
+            'trump',
+            'childRoth',
+            'wageRoth',
+            'parentRoth',
+            '529',
+            'brokerage',
+            'cash',
+            'custodial',
+          ],
+        } as const
+        let qualified529 = D(0)
+        for (const vehicle of orders[s.withdrawalOrder]) {
+          const account = accounts[vehicle]
           const amount = spend(account, need, key)
           need = nonnegative(need.minus(amount))
           fromAccounts = fromAccounts.plus(amount)
+          if (vehicle === '529' && s.eligibleInstitution && ['tuition', 'books'].includes(key))
+            qualified529 = qualified529.plus(amount)
         }
         if (s.fundingPolicy === 'minimizeDebt') {
           const amount = borrowFederal(need)
@@ -606,6 +995,18 @@ export function simulateScenario(
           need = D(0)
         }
         unfunded = unfunded.plus(need)
+        if (
+          s.creditMode !== 'none' &&
+          (key === 'tuition' || (s.creditMode === 'aotc' && key === 'books'))
+        )
+          creditExpenses = creditExpenses.plus(
+            nonnegative(
+              expense
+                .minus(cost.isZero() ? 0 : aid.mul(expense).div(cost))
+                .minus(qualified529)
+                .minus(need),
+            ),
+          )
       })
       if (aid.gt(0))
         log(date, 'aid', aid, 'Explicit grant/scholarship aid; loans are not aid.', {
@@ -704,6 +1105,8 @@ export function simulateScenario(
         contribute(accounts.roth, toRoth, date)
         accounts.roth.rothCategories.conversions.push({ year: y, amount: toRoth })
         unearned = unearned.plus(requested.minus(basis))
+        iraYearDistributions = iraYearDistributions.plus(requested)
+        iraYearPlanningTaxable = iraYearPlanningTaxable.plus(requested.minus(basis))
         converted = converted.plus(toRoth)
         conversionTaxes = conversionTaxes.plus(tax)
         penalties = penalties.plus(withholdingPenalty)
@@ -788,6 +1191,40 @@ export function simulateScenario(
         )
       }
     }
+    if (s.childRothAnnualSaving > 0 && incomeCash.gt(0)) {
+      const amount = Decimal.min(
+        D(s.childRothAnnualSaving).div(12),
+        nonnegative(incomeCash.minus(cashUsed).minus(monthlyPayments)),
+        nonnegative(
+          D(
+            y - Number(s.birthDate.slice(0, 4)) >= 50
+              ? ira.annualRothCap50.value
+              : ira.annualRothCap.value,
+          )
+            .minus(s.annualOtherIraContributions)
+            .minus(rothYearUsed),
+        ),
+        nonnegative(yearlyEarned(date).minus(s.annualOtherIraContributions).minus(rothYearUsed)),
+      )
+      if (amount.gt(0)) {
+        contribute(accounts.wageRoth, amount, date)
+        rothYearUsed = rothYearUsed.plus(amount)
+        cashUsed = cashUsed.plus(amount)
+        childEarnedContributions = childEarnedContributions.plus(amount)
+        log(
+          date,
+          'contribution',
+          amount,
+          'Additional direct Roth saving explicitly funded from child wages, subject to compensation and shared annual IRA capacity. Separate from parental funding.',
+          {
+            vehicleId: 'wageRoth',
+            payer: 'child earnings',
+            basis: str(amount),
+            sourceIds: ['SRC-IRS-PUB590A'],
+          },
+        )
+      }
+    }
     if (s.careerEnabled && date >= retirementStart) {
       const planned = incomeCash.mul(s.savingsRate)
       const contribution = nonnegative(
@@ -813,14 +1250,21 @@ export function simulateScenario(
       traditional: str(accounts.trump.balance),
       roth: str(accounts.roth.balance),
       debt: str(loanBalance()),
-      career: str(career),
+      career: str(career.plus(accounts.wageRoth.balance)),
+      flexible: str(
+        accounts.brokerage.balance
+          .plus(accounts.custodial.balance)
+          .plus(accounts.cash.balance)
+          .plus(accounts.childRoth.balance),
+      ),
+      parentRetirement: str(accounts.parentRoth.balance),
     })
   }
-  if (!captured18)
-    age18 = accounts['529'].balance.plus(accounts.trump.balance).plus(accounts.roth.balance)
+  settleYear()
+  if (!captured18) age18 = allBalances()
   if (rejected.gt(0))
     warnings.add(
-      `${str(rejected)} of scheduled Trump contributions could not enter the account because of eligibility/caps; not counted as contributions or invested elsewhere.`,
+      `${str(rejected)} of scheduled contributions could not enter the chosen accounts because of eligibility/compensation/caps; not counted as contributions or invested elsewhere.`,
     )
   if (s.educationYears > 0 && educationStart < start)
     warnings.add(
@@ -848,23 +1292,97 @@ export function simulateScenario(
     warnings.add(
       'Roth account has not satisfied its five-tax-year requirement at retirement; earnings are included in hypothetical ordinary liquidation tax.',
     )
-  const childhood = liquidation529.net
+  const ctx = withdrawalContext(retirementDate, false)
+  const flexibleQuotes = [
+    accounts.brokerage,
+    accounts.custodial,
+    accounts.cash,
+    accounts.childRoth,
+  ].map((a) =>
+    vehicleRegistry[a.id].quote(a, a.balance, {
+      ...ctx,
+      tax: { ...ctx.tax, scenario: { ...s, withdrawalTaxRate: s.retirementTaxRate } },
+    }),
+  )
+  const flexibleNet = flexibleQuotes.reduce((sum, w) => sum.plus(w.net), D(0))
+  const flexibleTax = flexibleQuotes.reduce((sum, w) => sum.plus(w.tax), D(0))
+  const parentQuote = vehicleRegistry.parentRoth.quote(
+    accounts.parentRoth,
+    accounts.parentRoth.balance,
+    ctx,
+  )
+  const parentRetirement = parentQuote.net
+  const wageRothQuote = vehicleRegistry.wageRoth.quote(
+    accounts.wageRoth,
+    accounts.wageRoth.balance,
+    { ...ctx, tax: { ...ctx.tax, scenario: { ...s, withdrawalTaxRate: s.retirementTaxRate } } },
+  )
+  const careerNet = career.plus(wageRothQuote.net)
+  const family529 =
+    s.leftover529 === 'family' && s.familyTransferEligible ? accounts['529'].balance : D(0)
+  const childhood = (family529.gt(0) ? D(0) : liquidation529.net)
     .plus(accounts.trump.balance.minus(traditionalTax))
     .plus(accounts.roth.balance.minus(rothTax))
+    .plus(flexibleNet)
   log(
     retirementDate,
     'valuation',
     childhood,
-    'Hypothetical after-tax liquidation valuation, not an executed sale: remaining 529 nonqualified earnings tax/additional tax and NY recapture; traditional taxable share at retirement effective rate; Roth tax-free only when its five-tax-year qualification period is satisfied.',
+    'Hypothetical after-tax childhood-funded valuation, not an executed sale: remaining 529 nonqualified liquidation unless retained for family; traditional taxable share; qualified Roth and direct child Roth; flexible investments net of gain taxes. Parent retirement, restricted family 529 and child wage-funded Roth remain separate.',
     {
       tax: str(
-        liquidation529.tax.plus(liquidation529.stateRecapture).plus(traditionalTax).plus(rothTax),
+        (family529.gt(0) ? D(0) : liquidation529.tax.plus(liquidation529.stateRecapture))
+          .plus(traditionalTax)
+          .plus(rothTax)
+          .plus(flexibleTax),
       ),
-      penalty: str(liquidation529.penalty),
+      penalty: str(family529.gt(0) ? D(0) : liquidation529.penalty),
       payer: 'hypothetical liquidation proceeds',
-      sourceIds: ['SRC-IRS-PUB970', 'SRC-IRS-8606', 'SRC-IRS-PUB590B', 'SRC-NY-IT225'],
+      sourceIds: [
+        'SRC-IRS-PUB970',
+        'SRC-IRS-8606',
+        'SRC-IRS-PUB590B',
+        'SRC-IRS-PUB550',
+        'SRC-NY-IT225',
+      ],
     },
   )
+  if (parentRetirement.gt(0))
+    log(
+      retirementDate,
+      'valuation',
+      parentRetirement,
+      'Retained parent retirement assets at the child comparison horizon; not transferred to the child and not included in childhood-funded assets.',
+      {
+        vehicleId: 'parentRoth',
+        payer: 'hypothetical parent liquidation proceeds',
+        tax: str(parentQuote.tax),
+        penalty: str(parentQuote.penalty),
+        sourceIds: ['SRC-IRS-PUB590B'],
+      },
+    )
+  if (family529.gt(0))
+    log(
+      retirementDate,
+      'valuation',
+      family529,
+      'Retained restricted family education savings; same-generation eligible beneficiary change confirmed. No spendable child retirement proceeds or executed liquidation.',
+      { vehicleId: '529', sourceIds: ['SRC-IRS-PUB970'] },
+    )
+  if (accounts.wageRoth.balance.gt(0))
+    log(
+      retirementDate,
+      'valuation',
+      wageRothQuote.net,
+      'After-tax child wage-funded Roth value, included once in separate career assets, excluded from childhood-funded assets.',
+      {
+        vehicleId: 'wageRoth',
+        payer: 'hypothetical wage-funded Roth liquidation proceeds',
+        tax: str(wageRothQuote.tax),
+        penalty: str(wageRothQuote.penalty),
+        sourceIds: ['SRC-IRS-PUB590B'],
+      },
+    )
   const sum = (key: keyof Omit<FundingPeriod, 'date' | 'age'>) =>
     periods.reduce((a, p) => a.plus(p[key]), D(0))
   const totalInterest = loans.reduce((a, l) => a.plus(l.interest), D(0))
@@ -882,6 +1400,8 @@ export function simulateScenario(
       thirdParty: str(thirdParty),
       rejected: str(rejected),
       age18: str(age18),
+      netParentOutlay: str(parent.minus(benefits).minus(credits)),
+      childEarned: str(childEarnedContributions),
     },
     education: {
       periods,
@@ -936,22 +1456,39 @@ export function simulateScenario(
       withdrawal: str(taxes),
       conversion: str(conversionTaxes),
       penalties: str(penalties),
-      lifetime: str(taxes.plus(conversionTaxes)),
+      lifetime: str(taxes.plus(conversionTaxes).plus(investmentTaxes)),
     },
     conversions: { converted: str(converted), taxes: str(conversionTaxes), rollover: str(rolled) },
     retirement: {
       plan529: str(accounts['529'].balance),
       traditional: str(accounts.trump.balance),
       roth: str(accounts.roth.balance),
-      career: str(career),
+      career: str(careerNet),
+      parentRetirement: str(parentRetirement),
       afterTaxChildhood: str(childhood),
-      wholeLifetime: str(childhood.plus(career).minus(loanBalance())),
+      wholeLifetime: str(childhood.plus(careerNet).minus(loanBalance())),
       liquidationTax: str(
-        liquidation529.tax.plus(liquidation529.stateRecapture).plus(traditionalTax).plus(rothTax),
+        (family529.gt(0) ? D(0) : liquidation529.tax.plus(liquidation529.stateRecapture))
+          .plus(traditionalTax)
+          .plus(rothTax)
+          .plus(flexibleTax),
       ),
-      liquidationPenalty: str(liquidation529.penalty),
+      liquidationPenalty: str(family529.gt(0) ? D(0) : liquidation529.penalty),
+      brokerage: str(accounts.brokerage.balance),
+      custodial: str(accounts.custodial.balance),
+      cash: str(accounts.cash.balance),
+      childRoth: str(accounts.childRoth.balance),
+      wageRoth: str(accounts.wageRoth.balance),
+      family529: str(family529),
+      householdAssets: str(
+        childhood.plus(parentRetirement).plus(family529).plus(careerNet).minus(loanBalance()),
+      ),
     },
     parentBenefits: str(benefits),
+    educationCredits: str(credits),
+    investmentTaxes: str(investmentTaxes),
+    aidAssessment,
+    iraWorksheets,
     warnings: [...warnings],
   }
 }

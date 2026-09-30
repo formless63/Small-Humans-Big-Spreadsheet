@@ -1,5 +1,13 @@
 import type { Decimal } from './engine/money'
-export type VehicleId = '529' | 'trump' | 'roth'
+export type ContributionVehicle =
+  | '529'
+  | 'trump'
+  | 'brokerage'
+  | 'custodial'
+  | 'cash'
+  | 'childRoth'
+  | 'parentRoth'
+export type VehicleId = ContributionVehicle | 'roth' | 'wageRoth'
 export type Category =
   | 'contribution'
   | 'growth'
@@ -51,6 +59,8 @@ export interface TimelinePoint {
   roth: string
   debt: string
   career: string
+  flexible: string
+  parentRetirement: string
 }
 export interface LoanTranche {
   id: string
@@ -94,7 +104,14 @@ export interface SimulationResult {
     taxes: string
     penalties: string
   }
-  contributions: { parent: string; thirdParty: string; rejected: string; age18: string }
+  contributions: {
+    parent: string
+    thirdParty: string
+    rejected: string
+    age18: string
+    netParentOutlay: string
+    childEarned: string
+  }
   debt: {
     tranches: LoanTranche[]
     federalPrincipal: string
@@ -118,7 +135,32 @@ export interface SimulationResult {
     wholeLifetime: string
     liquidationTax: string
     liquidationPenalty: string
+    brokerage: string
+    custodial: string
+    cash: string
+    childRoth: string
+    wageRoth: string
+    parentRetirement: string
+    family529: string
+    householdAssets: string
   }
   parentBenefits: string
+  educationCredits: string
+  investmentTaxes: string
+  aidAssessment: {
+    date: string
+    federalAssetContribution: string
+    institutionAssetContribution: string
+    modeledAidReduction: string
+  }[]
+  iraWorksheets: {
+    year: number
+    basisAvailable: string
+    distributionAndConversion: string
+    yearEndValue: string
+    nontaxable: string
+    taxable: string
+    planningTaxable: string
+  }[]
   warnings: string[]
 }

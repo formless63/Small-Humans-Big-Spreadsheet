@@ -136,5 +136,53 @@
     "checkedAt": "2026-09-30",
     "bytes": 13824,
     "sha256": "32d2210e347dc97f17f7280a71d27a0d663f8646637845c834350ea5f27ae948"
+  },
+  {
+    "document": "expansion-pub550",
+    "checkedAt": "2026-09-30",
+    "bytes": 1323822,
+    "sha256": "4fc134139fea86b67dbef09bf6c29b928e10ba08c54b07d4159796f3746220a5"
+  },
+  {
+    "document": "expansion-capital",
+    "checkedAt": "2026-09-30",
+    "bytes": 108118,
+    "sha256": "6253a5c1e6b13752e3467da2daefec0ef10d624aec37134b7b0dd6f3257161c8"
+  },
+  {
+    "document": "expansion-fafsa",
+    "checkedAt": "2026-09-30",
+    "bytes": 297705,
+    "sha256": "c2df08bf109da52da8ce4d33b7907ff93e7af9eca1c6e789d824e17c5390e56c"
+  },
+  {
+    "document": "expansion-sai-chapter",
+    "checkedAt": "2026-09-30",
+    "bytes": 150686,
+    "sha256": "0e784b844ad6e6cf44d49b9072433f647a690e9e644333402b23387a979190e0"
+  },
+  {
+    "document": "expansion-pub970",
+    "checkedAt": "2026-09-30",
+    "bytes": 877919,
+    "sha256": "c8f168327632e631ce46290585ce4e9a518a2c023af542d0e6ea4cb7331f419d"
+  },
+  {
+    "document": "expansion-pub590a",
+    "checkedAt": "2026-09-30",
+    "bytes": 723616,
+    "sha256": "b8fc5b03c53b235f9882488b026ddf89cefec0162e9f9b0f9217eb8bc2e0d046"
+  },
+  {
+    "document": "expansion-pub590b",
+    "checkedAt": "2026-09-30",
+    "bytes": 997238,
+    "sha256": "7f21e3ee1525f6d85b10d12042dcf9908ded275fe7ff4d46ddaa9596c623a9ea"
+  },
+  {
+    "document": "expansion-8606",
+    "checkedAt": "2026-09-30",
+    "bytes": 287122,
+    "sha256": "6e81e828e20da129b316acd6e58bc656e826a40cfdc2e4661431105a628fd6a4"
   }
 ]

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { D } from '../model/engine/money'
 import { presetById } from './presets'
 
 const amount = z.number().finite().min(0).max(1e7)
@@ -10,9 +11,120 @@ export const scenarioSchema = z
     asOf: date.default('2026-09-30'),
     birthDate: date.default('2024-09-30'),
     annualContribution: amount.default(5000),
+    householdBudgetShare: z.number().min(0).max(1).default(1),
     contributionFrequency: z.enum(['monthly', 'annual']).default('monthly'),
     contributionEndAge: z.number().int().min(0).max(18).default(18),
     share529: z.number().min(0).max(1).default(0.5),
+    strategyVehicle: z
+      .enum([
+        'split',
+        '529',
+        'trump',
+        'brokerage',
+        'custodial',
+        'cash',
+        'childRoth',
+        'parentRoth',
+        'custom',
+      ])
+      .default('split'),
+    compareVehicles: z
+      .array(z.enum(['529', 'trump', 'brokerage', 'custodial', 'cash', 'childRoth', 'parentRoth']))
+      .max(7)
+      .default(['529', 'trump']),
+    allocation: z
+      .array(
+        z.object({
+          vehicle: z.enum([
+            '529',
+            'trump',
+            'brokerage',
+            'custodial',
+            'cash',
+            'childRoth',
+            'parentRoth',
+          ]),
+          share: z.number().min(0).max(1),
+        }),
+      )
+      .max(7)
+      .default([]),
+    allocationChanges: z
+      .array(
+        z.object({
+          age: z.number().min(0).max(25),
+          vehicle: z.enum([
+            '529',
+            'trump',
+            'brokerage',
+            'custodial',
+            'cash',
+            'childRoth',
+            'parentRoth',
+          ]),
+          share529: z.number().min(0).max(1),
+        }),
+      )
+      .max(10)
+      .default([]),
+    comparisonMode: z.enum(['gross', 'net']).default('gross'),
+    withdrawalOrder: z
+      .enum(['educationFirst', 'flexibleFirst', 'retirementFirst'])
+      .default('educationFirst'),
+    glidePath: z.boolean().default(false),
+    glideStartAge: z.number().min(0).max(30).default(14),
+    glideReturn: z.number().min(-0.95).max(0.5).default(0.02),
+    shockEnabled: z.boolean().default(false),
+    shockAge: z.number().min(0).max(50).default(17),
+    shockReturn: z.number().min(-0.95).max(0.5).default(-0.3),
+    dividendYield: z.number().min(0).max(0.2).default(0.02),
+    parentCapitalGainsRate: rate.default(0.15),
+    parentOrdinaryRate: rate.default(0.24),
+    childCapitalGainsRate: rate.default(0.15),
+    stateInvestmentTaxRate: rate.default(0),
+    cashReturn: z.number().min(0).max(0.3).default(0.02),
+    cashKind: z.enum(['savings', 'cd', 'treasury']).default('savings'),
+    cashMaturityAge: z.number().min(0).max(70).default(19),
+    cashEarlyWithdrawalRate: rate.default(0),
+    childEmploymentAge: z.number().int().min(0).max(25).default(16),
+    childEmploymentAnnual: amount.default(0),
+    childRothAnnualSaving: amount.default(0),
+    parentAge: z.number().int().min(18).max(75).default(35),
+    parentCompensation: amount.default(150000),
+    parentRothEligible: z.boolean().default(false),
+    parentOtherIraContributions: amount.default(0),
+    parentRothEducation: z.boolean().default(false),
+    childRothEducation: z.boolean().default(true),
+    state529Mode: z.enum(['ny', 'custom', 'none']).default('ny'),
+    customStateName: z.string().max(50).default('My state'),
+    customStateDeductionCap: amount.default(0),
+    customStateDeductionRate: rate.default(0),
+    customStateCreditRate: rate.default(0),
+    customStateCreditCap: amount.default(0),
+    customStateRecapture: z.boolean().default(false),
+    aidMode: z.enum(['manual', 'assetImpact']).default('manual'),
+    parentAidMarginalRate: z.number().min(0).max(0.47).default(0.47),
+    assetReportingExempt: z.boolean().default(false),
+    trumpAidTreatment: z.enum(['retirement', 'parent', 'student']).default('retirement'),
+    institutionAssessment: z.boolean().default(false),
+    institutionParentAssetRate: rate.default(0.05),
+    institutionStudentAssetRate: rate.default(0.25),
+    institutionRetirementAssetRate: rate.default(0),
+    aidAwardResponse: z.number().min(0).max(1).default(0),
+    creditMode: z.enum(['none', 'aotc', 'llc']).default('none'),
+    creditEligible: z.boolean().default(false),
+    creditJoint: z.boolean().default(true),
+    creditMagi: amount.default(150000),
+    creditTaxLiability: amount.default(10000),
+    creditReserveAnnual: amount.default(4000),
+    extraDebtPayment: amount.default(0),
+    extraDebtOrder: z.enum(['highestRate', 'federalFirst', 'gapFirst']).default('highestRate'),
+    leftover529: z.enum(['liquidate', 'family']).default('liquidate'),
+    siblingBirthDates: z.array(date).max(3).default([]),
+    familyTransferEligible: z.boolean().default(false),
+    outsideIraBasis: amount.default(0),
+    outsideIraYearEndValue: amount.default(0),
+    sensitivityEnabled: z.boolean().default(false),
     annualReturn: z.number().min(-0.95).max(0.5).default(0.05),
     retirementAge: z.number().int().min(60).max(70).default(65),
     educationPreset: z
@@ -94,6 +206,44 @@ export const scenarioSchema = z
     debtCrowdOut: z.boolean().default(true),
   })
   .superRefine((s, ctx) => {
+    if (
+      s.strategyVehicle === 'custom' &&
+      (s.allocation.length === 0 ||
+        !s.allocation.reduce((a, v) => a.plus(v.share), D(0)).eq(1) ||
+        new Set(s.allocation.map((v) => v.vehicle)).size !== s.allocation.length)
+    )
+      ctx.addIssue({
+        code: 'custom',
+        path: ['allocation'],
+        message: 'Use each account once and allocate exactly 100% of new contributions.',
+      })
+    if (new Set(s.allocationChanges.map((c) => c.age)).size !== s.allocationChanges.length)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['allocationChanges'],
+        message: 'Choose a different starting age for each allocation change.',
+      })
+    if (
+      Math.max(
+        s.parentCapitalGainsRate,
+        s.parentOrdinaryRate,
+        s.childCapitalGainsRate,
+        s.withdrawalTaxRate,
+      ) +
+        s.stateInvestmentTaxRate >=
+      0.95
+    )
+      ctx.addIssue({
+        code: 'custom',
+        path: ['stateInvestmentTaxRate'],
+        message: 'Combined investment tax rates must stay below 95%.',
+      })
+    if (s.customStateDeductionRate + s.customStateCreditRate >= 0.95)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['customStateDeductionRate'],
+        message: 'Combined state incentives must stay below 95%.',
+      })
     if (s.nyEnabled && Math.max(s.withdrawalTaxRate, s.retirementTaxRate) + s.nyTaxRate + 0.1 >= 1)
       ctx.addIssue({
         code: 'custom',
@@ -114,6 +264,13 @@ export const scenarioSchema = z
         path: ['birthDate'],
         message: 'Birth date cannot be after the simulation start.',
       })
+    for (const birth of s.siblingBirthDates)
+      if (birth > s.asOf || (Date.parse(s.asOf) - Date.parse(birth)) / 31557600000 > 25)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['siblingBirthDates'],
+          message: 'Additional children must be age 0–25 at the simulation start.',
+        })
     const age = (Date.parse(s.asOf) - Date.parse(s.birthDate)) / 31557600000
     if (age >= s.retirementAge || age < 0 || age > 25)
       ctx.addIssue({

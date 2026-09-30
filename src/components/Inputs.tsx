@@ -3,6 +3,7 @@ import { sourceById } from '../data/sources'
 import { currency } from '../lib/format'
 import { educationPresets, expenseKeys, presetById, strategyPresets } from '../scenarios/presets'
 import type { Scenario } from '../scenarios/schema'
+import { ExpandedInputs } from './ExpandedInputs'
 export function SourceLink({ id }: { id: string }) {
   const s = sourceById[id]
   return s ? (
@@ -139,7 +140,13 @@ export function Inputs({
             }
           />
         </label>
-        {numeric('annualContribution', 'Annual parent contribution', { max: 1000000, step: 500 })}
+        {numeric(
+          'annualContribution',
+          s.comparisonMode === 'gross'
+            ? 'Annual parent contribution'
+            : 'Annual parent net saving budget',
+          { max: 1000000, step: 500 },
+        )}
         {numeric('contributionEndAge', 'Contribution end age', { max: 18 })}
         {numeric('annualReturn', 'Real investment return', {
           percent: true,
@@ -183,7 +190,9 @@ export function Inputs({
                 type="button"
                 key={p.id}
                 aria-pressed={s.share529 === p.share529}
-                onClick={() => update({ share529: p.share529 })}
+                onClick={() =>
+                  update({ share529: p.share529, strategyVehicle: 'split', allocationChanges: [] })
+                }
               >
                 {p.name}
               </button>
@@ -201,10 +210,17 @@ export function Inputs({
             max="100"
             step="5"
             value={s.share529 * 100}
-            onChange={(e) => update({ share529: Number(e.target.value) / 100 })}
+            onChange={(e) =>
+              update({
+                share529: Number(e.target.value) / 100,
+                strategyVehicle: 'split',
+                allocationChanges: [],
+              })
+            }
           />
         </fieldset>
       </div>
+      <ExpandedInputs scenario={s} update={update} />
       <details className="advanced">
         <summary>
           Advanced assumptions <span>Costs, aid, taxes, loans, Roth & career</span>

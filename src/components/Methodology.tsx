@@ -28,16 +28,29 @@ export function Methodology({ result }: { result: SimulationResult }) {
               interest is simple during school and grace, then capitalizes once at repayment.
               Currency reports round half up; account bookkeeping uses Decimal arithmetic.
             </p>
-            <h3>Three retirement concepts</h3>
+            <h3>Who owns the money?</h3>
             <p>
-              <strong>Childhood assets:</strong> remaining 529, traditional and Roth accounts after
-              hypothetical liquidation tax. A 529 is not a retirement account; remaining
-              nonqualified earnings incur modeled tax, additional tax and NY recapture.
+              <strong>Childhood-funded education / future assets:</strong> education savings, child
+              accounts and parent-owned investments earmarked for the child, after hypothetical
+              liquidation tax. Parent-controlled investments are not automatically a legal gift.
+              Nonqualified 529 earnings incur modeled taxes and penalties unless savings are
+              retained as a separate restricted family education asset.
             </p>
             <p>
-              <strong>Career assets:</strong> separate gross-income-based savings.{' '}
+              <strong>Parent retirement:</strong> retained parent Roth assets, separate from child
+              funds. <strong>Career assets:</strong> separate gross-income-based savings and
+              explicitly wage-funded child Roth contributions.{' '}
               <strong>Debt opportunity cost:</strong> counterfactual future value of earnings-funded
               payments; never subtracted twice.
+            </p>
+            <h3>Comparison methods</h3>
+            <p>
+              Compare equal gross deposits or equal parental cost after state contribution
+              incentives. Education credits stay a separate parent benefit. Allocation changes
+              redirect new deposits without transferring existing assets. Investment glide paths,
+              adverse-return scenarios, and sensitivity cases use explicit return assumptions, not
+              forecasts. Taxable sales use proportional holdings; direct Roth contributions are
+              withdrawn before earnings. All taxes reduce an identified source of money.
             </p>
             <h3>Limits of this model</h3>
             <ul>

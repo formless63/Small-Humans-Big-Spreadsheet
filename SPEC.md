@@ -2028,3 +2028,9 @@ money contributed
 If two strategies differ by $100,000 at age 65, a user should be able to trace essentially every dollar of that difference.
 
 That transparency is the product.
+
+# 46. Authorized expanded comparison and guided single-page workflow
+
+The owner has authorized the expanded strategies and methods described in `docs/methodology.md`: parent brokerage, custodial investing, cash/CD illustrations, direct child Roth, parent Roth retirement-first, equal-net-cost contribution comparisons, changing allocations, education glide paths and adverse-return scenarios, withdrawal sequencing and conservative education-credit coordination, extra debt repayment, unused family 529 retention, separate multi-child budget projections, state-policy inputs, aid asset-component sensitivity, annual IRA basis review, and deterministic sensitivity comparisons.
+
+The default entry is a short, plain-language guided question flow on the same page. Goals narrow relevant choices. Detailed controls remain available at any time and edit the same scenario. Resources are optional clickable primary-source links. No financial input goes to a backend. New calculations must preserve account ownership and explicit funding, including separate parent retirement, restricted family savings, and child wage-funded assets. New modules and assumptions carry their source year and limitations; partial aid or tax calculations must not be labeled full FAFSA, institutional-award or tax-return predictions.

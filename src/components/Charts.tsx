@@ -37,7 +37,10 @@ export function Charts({
     ...Object.fromEntries(
       results.map((r) => {
         const t = r.timeline.find((t) => t.date === p.date)!
-        return [r.name, Number(sumMoney(t.plan529, t.traditional, t.roth))]
+        return [
+          r.name,
+          Number(sumMoney(t.plan529, t.traditional, t.roth, t.flexible, t.parentRetirement)),
+        ]
       }),
     ),
   }))
@@ -53,7 +56,7 @@ export function Charts({
   const retirement = results.map((r, i) => ({
     name: r.name,
     value: Number(r.retirement.afterTaxChildhood),
-    fill: colors[i],
+    fill: colors[i % colors.length],
   }))
   return (
     <div className="chart-grid">
@@ -66,8 +69,9 @@ export function Charts({
           <span className="badge">Real 2026 dollars</span>
         </div>
         <p className="muted">
-          Childhood-funded account balances before hypothetical liquidation taxes. Debt is shown in
-          the table below.
+          Childhood-funded account balances, including parent-retirement savings, before
+          hypothetical liquidation taxes. Wage-funded saving is separate. Debt is shown in the table
+          below.
         </p>
         <div
           className="chart"
@@ -96,7 +100,7 @@ export function Charts({
                   key={r.id}
                   name={r.name}
                   dataKey={r.name}
-                  stroke={colors[i]}
+                  stroke={colors[i % colors.length]}
                   strokeWidth={2.5}
                   dot={false}
                   isAnimationActive={false}
@@ -126,8 +130,16 @@ export function Charts({
                       const t = r.timeline.find((t) => t.date === p.date)!
                       return (
                         <td key={r.id}>
-                          {currency(sumMoney(t.plan529, t.traditional, t.roth))} /{' '}
-                          {currency(t.debt)}
+                          {currency(
+                            sumMoney(
+                              t.plan529,
+                              t.traditional,
+                              t.roth,
+                              t.flexible,
+                              t.parentRetirement,
+                            ),
+                          )}{' '}
+                          / {currency(t.debt)}
                         </td>
                       )
                     })}

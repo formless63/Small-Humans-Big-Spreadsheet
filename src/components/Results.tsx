@@ -10,9 +10,19 @@ export function Results({
   selectedId: string
 }) {
   const rows: [string, (r: SimulationResult) => string][] = [
+    [
+      'Net parent outlay after modeled state incentives / education credits',
+      (r) => currency(r.contributions.netParentOutlay),
+    ],
+    [
+      'Child wage-funded Roth contributions (additional)',
+      (r) => currency(r.contributions.childEarned),
+    ],
+    ['Education credits (parent-side, not reinvested)', (r) => currency(r.educationCredits)],
+    ['Investment income taxes paid from account income', (r) => currency(r.investmentTaxes)],
     ['Parent contributions', (r) => currency(r.contributions.parent)],
     ['Third-party contributions', (r) => currency(r.contributions.thirdParty)],
-    ['NY parent tax benefit (not reinvested)', (r) => currency(r.parentBenefits)],
+    ['State parent contribution incentive (separate)', (r) => currency(r.parentBenefits)],
     ['Balance at age 18', (r) => currency(r.contributions.age18)],
     ['Gross education expense', (r) => currency(r.education.cost)],
     ['Grants / scholarships', (r) => currency(r.education.aid)],
@@ -44,6 +54,13 @@ export function Results({
     ['Lifetime transaction penalties', (r) => currency(r.taxes.penalties)],
     ['Remaining 529 (before liquidation)', (r) => currency(r.retirement.plan529)],
     ['Trump / traditional (before liquidation)', (r) => currency(r.retirement.traditional)],
+    ['Parent-owned brokerage (earmarked for child)', (r) => currency(r.retirement.brokerage)],
+    ['Child-owned custodial investments', (r) => currency(r.retirement.custodial)],
+    ['Cash / savings', (r) => currency(r.retirement.cash)],
+    ['Direct child Roth', (r) => currency(r.retirement.childRoth)],
+    ['Wage-funded child Roth (included in career assets)', (r) => currency(r.retirement.wageRoth)],
+    ['Parent retirement assets (separate)', (r) => currency(r.retirement.parentRetirement)],
+    ['Restricted family 529 retained (separate)', (r) => currency(r.retirement.family529)],
     ['Roth balance', (r) => currency(r.retirement.roth)],
     [
       'Hypothetical liquidation tax / penalty',
@@ -70,14 +87,40 @@ export function Results({
             key={r.id}
           >
             <p className="strategy-role">
-              {r.id === selectedId ? 'Your selected strategy' : 'Single-account comparison'}
+              {r.id === selectedId ? 'Your selected strategy' : 'Reference strategy'}
             </p>
             <div className="strategy-title">
               <span className="dot" />
               <h3>{r.name}</h3>
             </div>
-            <p className="result-caption">After-tax childhood assets at age {retirementAge}</p>
+            <p className="result-caption">
+              After-tax education / future assets at age {retirementAge}
+            </p>
             <p className="big-number">{currency(r.retirement.afterTaxChildhood)}</p>
+            {Number(r.retirement.career) > 0 && (
+              <p className="ownership-metric">
+                Child wage / career retirement assets, separate:{' '}
+                <strong>{currency(r.retirement.career)}</strong>
+              </p>
+            )}
+            {Number(r.retirement.parentRetirement) > 0 && (
+              <p className="ownership-metric">
+                Parent retirement, separate:{' '}
+                <strong>{currency(r.retirement.parentRetirement)}</strong>
+              </p>
+            )}
+            {Number(r.retirement.family529) > 0 && (
+              <p className="ownership-metric">
+                Restricted family education savings, separate:{' '}
+                <strong>{currency(r.retirement.family529)}</strong>
+              </p>
+            )}
+            {Number(r.contributions.rejected) > 0 && (
+              <p className="gap-warning">
+                {currency(r.contributions.rejected)} of planned deposits rejected by account
+                eligibility / caps; not invested elsewhere.
+              </p>
+            )}
             <div className="mini-metrics">
               <div>
                 <span>At age 18</span>

@@ -36,6 +36,40 @@ const source = (
 })
 export const sources: SourceRecord[] = [
   source(
+    'SRC-IRS-PUB550',
+    'IRS',
+    'Publication 550: Investment Income and Expenses',
+    'https://www.irs.gov/publications/p550',
+    '2025',
+    'final-guidance',
+    'Interest, dividends, capital gains, reinvested dividends, and Treasury interest. Effective rates and proportional sales remain user assumptions.',
+  ),
+  source(
+    'SRC-IRS-CAPITAL',
+    'IRS',
+    'Topic 409: Capital Gains and Losses',
+    'https://www.irs.gov/taxtopics/tc409',
+    '2026',
+    'final-guidance',
+  ),
+  source(
+    'SRC-FSA-ASSETS2026',
+    'Federal Student Aid',
+    '2026–27 Handbook: Filling Out the FAFSA Form',
+    'https://fsapartners.ed.gov/knowledge-center/fsa-handbook/2026-2027/application-and-verification-guide/ch2-filling-out-fafsa-form',
+    '2026-27',
+    'final-guidance',
+  ),
+  source(
+    'SRC-FSA-SAI2026',
+    'Federal Student Aid',
+    '2026–27 Handbook: Student Aid Index and Pell Grant Eligibility',
+    'https://fsapartners.ed.gov/knowledge-center/fsa-handbook/2026-2027/application-and-verification-guide/ch3-student-aid-index-sai-and-pell-grant-eligibility',
+    '2026-27',
+    'final-guidance',
+    'Asset component sensitivity only, not a full SAI, Pell, FAFSA, or institutional award prediction.',
+  ),
+  source(
     'SRC-FSA-HANDBOOK2025',
     'Federal Student Aid',
     '2025–26 Handbook, Volume 8: Annual and Aggregate Loan Limits',

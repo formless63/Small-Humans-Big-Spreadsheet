@@ -4,6 +4,7 @@ import { D, Decimal, nonnegative } from '../engine/money'
 import { trumpAvailableFrom } from '../engine/timeline'
 import { incomeTax, type TaxContext } from '../taxes/ordinaryIncome'
 import type { VehicleId, Withdrawal } from '../types'
+import { flexibleVehicles } from './flexible'
 export interface Lot {
   date: string
   value: Decimal
@@ -18,6 +19,7 @@ export interface Account {
   nyDeductions: Decimal
   nyNonqualified: Decimal
   nyAdditions: Decimal
+  stateBenefits: Decimal
   rolloverLifetime: Decimal
   rothCategories: {
     direct: Decimal
@@ -35,6 +37,7 @@ export function createAccount(id: VehicleId): Account {
     nyDeductions: D(0),
     nyNonqualified: D(0),
     nyAdditions: D(0),
+    stateBenefits: D(0),
     rolloverLifetime: D(0),
     rothCategories: { direct: D(0), conversions: [], rollovers: D(0) },
   }
@@ -68,6 +71,8 @@ export function remove(account: Account, gross: Decimal): Decimal {
   return basis
 }
 export function nyRecapture(account: Account, gross: Decimal, s: Scenario): Decimal {
+  if (s.state529Mode === 'custom' && s.customStateRecapture)
+    return account.balance.isZero() ? D(0) : account.stateBenefits.mul(gross).div(account.balance)
   if (!s.nyEnabled) return D(0)
   const addition = nonnegative(
     account.nyNonqualified
@@ -97,6 +102,7 @@ const allocation = (account: Account, gross: Decimal) => {
   return { basis, taxable: nonnegative(gross.minus(basis)) }
 }
 export const vehicleRegistry: Record<VehicleId, VehicleModule> = {
+  ...flexibleVehicles,
   '529': {
     available: () => true,
     quote: (account, gross, ctx) => {
@@ -165,8 +171,29 @@ export function withdrawNet(account: Account, needed: Decimal, ctx: WithdrawalCo
   const max = module.quote(account, hi, ctx)
   if (max.net.lte(0)) return zero
   if (max.net.gt(needed)) {
-    if (ctx.qualified && account.id === '529' && ctx.stateQualified) hi = needed
-    else if (ctx.tax.scenario.taxMode === 'manual' && !ctx.additionalTaxExemptGross?.gt(0)) {
+    if (account.id === 'cash') hi = needed.mul(account.balance).div(max.net)
+    else if (
+      (account.id === 'brokerage' || account.id === 'custodial') &&
+      (account.id === 'brokerage' || ctx.tax.scenario.taxMode === 'manual')
+    )
+      hi = needed.mul(account.balance).div(max.net)
+    else if (
+      (account.id === 'childRoth' || account.id === 'parentRoth' || account.id === 'wageRoth') &&
+      (account.id === 'parentRoth' || ctx.tax.scenario.taxMode === 'manual')
+    ) {
+      const basis = Decimal.min(account.balance, account.basis)
+      hi = needed.lte(basis)
+        ? needed
+        : basis.plus(
+            needed.minus(basis).mul(account.balance.minus(basis)).div(max.net.minus(basis)),
+          )
+    } else if (ctx.qualified && account.id === '529' && ctx.stateQualified) hi = needed
+    else if (
+      ['529', 'trump'].includes(account.id) &&
+      !(ctx.tax.scenario.state529Mode === 'custom' && ctx.tax.scenario.customStateRecapture) &&
+      ctx.tax.scenario.taxMode === 'manual' &&
+      !ctx.additionalTaxExemptGross?.gt(0)
+    ) {
       const ratio = account.balance.isZero()
         ? D(0)
         : Decimal.min(1, account.basis.div(account.balance))
@@ -202,10 +229,18 @@ export function withdrawNet(account: Account, needed: Decimal, ctx: WithdrawalCo
     }
   }
   const result = module.quote(account, hi, ctx)
+  const priorBasis = account.basis
+  const priorBalance = account.balance
   remove(account, result.gross)
+  if ((account.id === 'brokerage' || account.id === 'custodial') && priorBalance.gt(0))
+    account.basis = priorBasis.mul(D(1).minus(result.gross.div(priorBalance)))
+  if (account.id === 'childRoth' || account.id === 'parentRoth' || account.id === 'wageRoth')
+    account.basis = account.balance.isZero() ? D(0) : nonnegative(priorBasis.minus(result.basis))
+  if (account.id === '529' && ctx.tax.scenario.state529Mode === 'custom' && priorBalance.gt(0))
+    account.stateBenefits = account.stateBenefits.mul(D(1).minus(result.gross.div(priorBalance)))
   if (account.id === '529' && !ctx.stateQualified) {
     account.nyNonqualified = account.nyNonqualified.plus(result.gross)
-    if (ctx.tax.scenario.nyTaxRate > 0)
+    if (ctx.tax.scenario.nyEnabled && ctx.tax.scenario.nyTaxRate > 0)
       account.nyAdditions = account.nyAdditions.plus(
         result.stateRecapture.div(ctx.tax.scenario.nyTaxRate),
       )

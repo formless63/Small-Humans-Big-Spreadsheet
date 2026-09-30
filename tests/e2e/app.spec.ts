@@ -5,6 +5,7 @@ test('selected strategy follows split controls and recalculates other assumption
   page,
 }) => {
   await page.goto('./')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
   const selected = page.locator('.result-card[data-selected="true"]')
   await expect(selected.getByRole('heading')).toHaveText('50/50 split')
   const initial = await selected.locator('.big-number').textContent()
@@ -47,6 +48,7 @@ test('static app works, changes presets, exposes math and sources, shares determ
   const errors: string[] = []
   page.on('pageerror', (e) => errors.push(e.message))
   await page.goto('./')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Small humans. Big possibilities.' }),
   ).toBeVisible()
@@ -86,6 +88,7 @@ test('static app works, changes presets, exposes math and sources, shares determ
 })
 test('education gap, conversion controls, tables and responsive layout', async ({ page }) => {
   await page.goto('./')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
   await page.getByLabel('Annual parent contribution').fill('0')
   await page.getByText('Advanced assumptions', { exact: false }).first().click()
   await page.getByLabel('Enable illustrative gap financing').uncheck()
@@ -123,8 +126,92 @@ test('invalid shared state fails safely', async ({ page }) => {
 
 test('accessible default experience', async ({ page }) => {
   await page.goto('./')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
   await expect(page.locator('.result-card')).toHaveCount(3)
   await expect(page.locator('.chart').first()).toBeVisible()
   const audit = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
   expect(audit.violations).toEqual([])
+})
+
+test('guided questions narrow choices and keep detailed controls on the same page', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await expect(
+    page.getByRole('heading', { name: 'What would you like this money to do?' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Keep future options open', exact: false }).click()
+  await expect(page.locator('.result-card').first()).toContainText('Parent-owned investments')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByLabel('Annual family saving budget').fill('7000')
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByRole('button', { name: 'No college', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await expect(
+    page.getByRole('button', { name: 'Child’s earned-income Roth IRA', exact: false }),
+  ).toHaveCount(0)
+  await page.getByRole('button', { name: 'Cash / savings / CDs', exact: false }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByRole('button', { name: 'Show my comparison', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Your comparison is ready.' })).toBeVisible()
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
+  await expect(page.getByLabel('Annual parent contribution')).toHaveValue('7000')
+  await expect(page.getByLabel('Selected savings strategy')).toHaveValue('cash')
+  await page.getByRole('button', { name: 'Copy scenario link' }).click()
+  const saved = await page.locator('.big-number').allTextContents()
+  await page.goto(page.url())
+  await expect(page.locator('.big-number')).toHaveText(saved)
+})
+
+test('expanded strategies, aid, sensitivity and family controls produce visible results', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
+  await page.getByLabel('Selected savings strategy').selectOption('brokerage')
+  await expect(page.locator('.result-card').first()).toContainText('Parent-owned investments')
+  await page.getByText('Investment risk & stress scenarios', { exact: true }).click()
+  await page.getByLabel('Compare alternate returns, tuition, aid and tax rates').check()
+  await expect(
+    page.getByRole('table', { name: 'Selected-strategy sensitivity comparison' }),
+  ).toContainText('Higher tuition')
+  await page.getByText('Financial aid: ownership sensitivity', { exact: true }).click()
+  await page.getByLabel('Aid modeling').selectOption('assetImpact')
+  await page.getByText('Financial aid: what ownership changes', { exact: true }).click()
+  await expect(
+    page.getByRole('table', { name: 'Annual asset assessments and modeled aid response' }),
+  ).toContainText('Parent-owned investments')
+  await page.getByText('Multiple children & annual IRA basis review', { exact: true }).click()
+  await page.getByLabel('Additional children’s birth dates (comma separated)').fill('2025-01-15')
+  await page.getByLabel('Additional children’s birth dates (comma separated)').blur()
+  await expect(page.getByRole('table', { name: 'Equal-budget family projections' })).toContainText(
+    'Child 2',
+  )
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+})
+
+test('guided default meets accessibility checks', async ({ page }) => {
+  await page.goto('./')
+  await expect(page.getByRole('heading', { name: 'Let’s build your plan.' })).toBeVisible()
+  const audit = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()
+  expect(audit.violations).toEqual([])
+})
+
+test('calculations stay local offline and use the latest edited values', async ({
+  page,
+  context,
+}) => {
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
+  await expect(page.locator('.result-card')).toHaveCount(3)
+  await expect(page.locator('.comparison')).toHaveAttribute('aria-busy', 'false')
+  await context.setOffline(true)
+  await page.getByLabel('Annual parent contribution').fill('6000')
+  await page.getByLabel('Annual parent contribution').fill('8000')
+  await expect(page.locator('.comparison')).toHaveAttribute('aria-busy', 'false')
+  await page.getByText('Compare every number', { exact: false }).click()
+  await expect(
+    page.getByRole('table', { name: 'Full strategy comparison in real 2026 dollars' }),
+  ).toContainText('$122,000')
+  await expect(page.locator('[role="alert"]')).toHaveCount(0)
 })
