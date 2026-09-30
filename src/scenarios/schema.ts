@@ -117,6 +117,7 @@ export const scenarioSchema = z
     creditMagi: amount.default(150000),
     creditTaxLiability: amount.default(10000),
     creditReserveAnnual: amount.default(4000),
+    creditPriorYears: z.number().int().min(0).max(4).default(0),
     extraDebtPayment: amount.default(0),
     extraDebtOrder: z.enum(['highestRate', 'federalFirst', 'gapFirst']).default('highestRate'),
     leftover529: z.enum(['liquidate', 'family']).default('liquidate'),

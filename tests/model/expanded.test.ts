@@ -514,3 +514,19 @@ it('rejects tiny overallocations and ambiguous allocation-change ages', () => {
     }).success,
   ).toBe(false)
 })
+
+it('does not force borrowing to reserve tuition for unavailable or exhausted credits', () => {
+  const s = scenario({
+    strategyVehicle: '529',
+    creditMode: 'aotc',
+    creditEligible: true,
+    creditMagi: 180000,
+  })
+  const unavailable = simulateScenario(s),
+    base = simulateScenario({ ...s, creditMode: 'none' })
+  expect(unavailable.education.accounts).toBe(base.education.accounts)
+  expect(unavailable.debt.federalPrincipal).toBe(base.debt.federalPrincipal)
+  const exhausted = simulateScenario({ ...s, creditMagi: 100000, creditPriorYears: 4 })
+  expect(exhausted.educationCredits).toBe('0.00')
+  expect(exhausted.education.accounts).toBe(base.education.accounts)
+})

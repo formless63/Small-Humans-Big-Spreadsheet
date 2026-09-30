@@ -436,6 +436,13 @@ export function ExpandedInputs({
             {num('creditMagi', 'Education-credit taxpayer modified adjusted gross income')}
             {num('creditTaxLiability', 'Annual tax liability available for nonrefundable credit')}
             {num('creditReserveAnnual', 'Annual eligible tuition reserved for credit')}
+            {num(
+              'creditPriorYears',
+              'American Opportunity credit years already claimed',
+              false,
+              0,
+              4,
+            )}
           </div>
           <p>
             Refundable credits and full tax-return interactions are not assumed. Scholarship amounts

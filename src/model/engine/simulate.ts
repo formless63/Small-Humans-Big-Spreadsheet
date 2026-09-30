@@ -62,7 +62,7 @@ export function simulateScenario(
     investmentTaxes = D(0),
     credits = D(0),
     creditExpenses = D(0),
-    creditYears = 0
+    creditYears = s.creditPriorYears
   let assessedYear = -1,
     assessedReduction = D(0),
     shockApplied = false,
@@ -75,7 +75,7 @@ export function simulateScenario(
     if (year < 0) return
     const credit = educationCredit(s, creditExpenses, creditYears)
     credits = credits.plus(credit)
-    if (creditExpenses.gt(0)) creditYears++
+    if (credit.gt(0)) creditYears++
     if (credit.gt(0))
       log(
         `${year}-12-31`,
@@ -734,6 +734,7 @@ export function simulateScenario(
         Number(date.slice(5, 7)) -
         Number(educationStart.slice(5, 7))
       const academicYear = Math.floor(monthIndex / 12)
+      const creditActive = educationCredit(s, D(s.creditReserveAnnual), creditYears).gt(0)
       const costs = expenseKeys.map((key) => ({ key, expense: money(D(s.expenses[key]).div(12)) }))
       const cost = costs.reduce((a, c) => a.plus(c.expense), D(0))
       if (s.aidMode === 'assetImpact' && academicYear !== assessedYear) {
@@ -840,12 +841,7 @@ export function simulateScenario(
         const qualified = isQualified && (key !== 'roomBoard' || s.halfTime)
         let qualifiedAmount =
           key === 'roomBoard' ? Decimal.min(needed, D(s.roomBoardQualifiedLimit).div(12)) : needed
-        if (
-          account.id === '529' &&
-          s.creditMode !== 'none' &&
-          s.creditEligible &&
-          ['tuition', 'books'].includes(key)
-        )
+        if (account.id === '529' && creditActive && ['tuition', 'books'].includes(key))
           qualifiedAmount = nonnegative(
             qualifiedAmount.minus(
               D(s.creditReserveAnnual)
@@ -859,14 +855,7 @@ export function simulateScenario(
           [needed.minus(qualifiedAmount), false],
         ] as const) {
           if (want.lte(0)) continue
-          if (
-            account.id === '529' &&
-            !qualify &&
-            key === 'tuition' &&
-            s.creditMode !== 'none' &&
-            s.creditEligible
-          )
-            continue
+          if (account.id === '529' && !qualify && key === 'tuition' && creditActive) continue
           const exemption =
             account.id === '529' && !qualify
               ? nonnegative(D(s.annual529PenaltyException).minus(penaltyExceptionUsed))
