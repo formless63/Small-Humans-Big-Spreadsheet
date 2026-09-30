@@ -5,11 +5,18 @@ import { dollars } from '../lib/format'
 import type { SimulationResult } from '../model/types'
 import { Button } from './ui/button'
 export function Ledger({ results }: { results: SimulationResult[] }) {
-  const [strategy, setStrategy] = useState('529'),
+  const [strategy, setStrategy] = useState('selected'),
     [category, setCategory] = useState('all'),
-    [page, setPage] = useState(0)
+    [cursor, setCursor] = useState({ ledger: results[0].ledger, page: 0 })
   const result = results.find((r) => r.id === strategy) ?? results[0]
-  const events = result.ledger.filter((e) => category === 'all' || e.category === category)
+  const page = cursor.ledger === result.ledger ? cursor.page : 0
+  const setPage = (value: number | ((previous: number) => number)) =>
+    setCursor({ ledger: result.ledger, page: typeof value === 'number' ? value : value(page) })
+  const activeCategory =
+    category === 'all' || result.ledger.some((e) => e.category === category) ? category : 'all'
+  const events = result.ledger.filter(
+    (e) => activeCategory === 'all' || e.category === activeCategory,
+  )
   const count = Math.ceil(events.length / 60),
     shown = events.slice(page * 60, page * 60 + 60)
   function download() {
@@ -55,12 +62,17 @@ export function Ledger({ results }: { results: SimulationResult[] }) {
         <label>
           Ledger strategy
           <select
-            value={result.id}
+            value={
+              strategy === 'selected' || !results.some((r) => r.id === strategy)
+                ? 'selected'
+                : strategy
+            }
             onChange={(e) => {
               setStrategy(e.target.value)
               setPage(0)
             }}
           >
+            <option value="selected">Your selected strategy — {results[0].name}</option>
             {results.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.name}
@@ -71,7 +83,7 @@ export function Ledger({ results }: { results: SimulationResult[] }) {
         <label>
           Event type
           <select
-            value={category}
+            value={activeCategory}
             onChange={(e) => {
               setCategory(e.target.value)
               setPage(0)

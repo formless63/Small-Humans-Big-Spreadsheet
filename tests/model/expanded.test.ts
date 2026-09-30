@@ -32,14 +32,9 @@ const context = (s: Scenario, date = '2044-10-01', age = 20) => ({
 })
 
 describe('additional ownership and account paths', () => {
-  it('reconciles every new account with and without gap borrowing', () => {
-    for (const strategyVehicle of [
-      'brokerage',
-      'custodial',
-      'cash',
-      'childRoth',
-      'parentRoth',
-    ] as const) {
+  it.each(['brokerage', 'custodial', 'cash', 'childRoth', 'parentRoth'] as const)(
+    'reconciles %s with and without gap borrowing',
+    (strategyVehicle) => {
       for (const gapEnabled of [true, false]) {
         const r = simulateScenario(
           scenario({
@@ -58,8 +53,8 @@ describe('additional ownership and account paths', () => {
           true,
         )
       }
-    }
-  })
+    },
+  )
   it('never gives child Roth compensation from a parent gift', () => {
     const r = simulateScenario(noSchool({ strategyVehicle: 'childRoth', childEmploymentAnnual: 0 }))
     expect(r.contributions.parent).toBe('0.00')

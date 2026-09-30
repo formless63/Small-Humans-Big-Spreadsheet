@@ -65,6 +65,7 @@ test('static app works, changes presets, exposes math and sources, shares determ
   await expect(page.getByLabel('Tax modeling')).toBeVisible()
   await page.getByLabel('Enable illustrative gap financing').uncheck()
   await page.getByText('Show the math', { exact: true }).click()
+  await page.getByLabel('Ledger strategy').selectOption('529')
   await expect(
     page.getByRole('table', { name: '529 plan: monthly calculation ledger' }),
   ).toBeVisible()
@@ -214,4 +215,24 @@ test('calculations stay local offline and use the latest edited values', async (
     page.getByRole('table', { name: 'Full strategy comparison in real 2026 dollars' }),
   ).toContainText('$122,000')
   await expect(page.locator('[role="alert"]')).toHaveCount(0)
+})
+
+test('the math ledger follows the selected plan until an explicit reference is chosen', async ({
+  page,
+}) => {
+  await page.goto('./')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
+  await page.getByText('Show the math', { exact: true }).click()
+  await expect(
+    page.getByRole('table', { name: '50/50 split: monthly calculation ledger' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: '75% 529 / 25% Trump', exact: true }).click()
+  await expect(
+    page.getByRole('table', { name: '75/25 split: monthly calculation ledger' }),
+  ).toBeVisible()
+  await page.getByLabel('Ledger strategy').selectOption('529')
+  await page.getByRole('button', { name: '100% Trump Account', exact: true }).click()
+  await expect(
+    page.getByRole('table', { name: '529 plan: monthly calculation ledger' }),
+  ).toBeVisible()
 })
