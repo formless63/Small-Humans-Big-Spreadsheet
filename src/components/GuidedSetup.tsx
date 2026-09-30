@@ -5,8 +5,16 @@ import { educationPresets, presetById } from '../scenarios/presets'
 import type { Scenario } from '../scenarios/schema'
 import { strategyChoices } from './ExpandedInputs'
 import { SourceLink } from './Inputs'
+import { TransferInputs } from './TransferInputs'
 
-const steps = ['Your goal', 'Your budget', 'Education', 'Where to save', 'How to use it']
+const steps = [
+  'Your goal',
+  'Your budget',
+  'Education',
+  'Where to save',
+  'How to use it',
+  'Move money later',
+]
 const explanations: Record<ContributionVehicle, string> = {
   '529':
     'Education-focused savings. Eligible education withdrawals receive tax advantages; other uses can create taxes and penalties.',
@@ -117,6 +125,7 @@ export function GuidedSetup({
               s.educationYears > 0
                 ? 'When education arrives, how should the money work?'
                 : 'What should we assume about growth?',
+              'Would you like to move savings into Roth later?',
             ][step]}
       </h3>
       {finished ? (
@@ -422,6 +431,7 @@ export function GuidedSetup({
               </p>
             </>
           )}
+          {step === 5 && <TransferInputs scenario={s} update={update} />}
           <div className="guide-actions">
             <button type="button" disabled={step === 0} onClick={() => move(step - 1)}>
               Back

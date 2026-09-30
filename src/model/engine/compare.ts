@@ -111,3 +111,29 @@ export const contributionVehicleIds: ContributionVehicle[] = [
   'childRoth',
   'parentRoth',
 ]
+
+export function transferTimingCases(s: Scenario) {
+  const variants: [string, Partial<Scenario>][] = [
+    ['Leave accounts in place', { conversionMode: 'none', rolloverEnabled: false }],
+    [
+      'Full Trump conversion when available',
+      { conversionMode: 'immediate', rolloverEnabled: false },
+    ],
+    [
+      'Full Trump conversion after school',
+      { conversionMode: 'afterSchool', rolloverEnabled: false },
+    ],
+    [
+      'Spread Trump conversions from age 18',
+      { conversionMode: 'fixed', conversionStartAge: 18, rolloverEnabled: false },
+    ],
+    [
+      'Eligible education leftovers to Roth',
+      { conversionMode: 'none', rolloverEnabled: true, rolloverStartAge: 0 },
+    ],
+  ]
+  return variants.map(([name, overrides]) => ({
+    name,
+    result: simulateScenario({ ...s, ...overrides }, 'transfer-comparison', name),
+  }))
+}

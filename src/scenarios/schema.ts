@@ -162,6 +162,11 @@ export const scenarioSchema = z
     conversionMode: z
       .enum(['none', 'immediate', 'afterSchool', 'fixed', 'threshold', 'custom'])
       .default('none'),
+    conversionStartAge: z.number().int().min(0).max(69).default(0),
+    conversionEndAge: z.number().int().min(18).max(69).default(69),
+    transferEducationReserve: amount.default(0),
+    rolloverStartAge: z.number().int().min(0).max(69).default(0),
+    transferComparisonEnabled: z.boolean().default(false),
     conversionAnnual: amount.default(7500),
     conversionThreshold: amount.default(25000),
     conversionSchedule: z
@@ -259,6 +264,18 @@ export const scenarioSchema = z
           path: ['conversionTaxByAge'],
           message: 'Tax age ranges must end after they begin.',
         })
+    if (s.conversionStartAge > s.conversionEndAge)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['conversionEndAge'],
+        message: 'Conversion end age must follow its start age.',
+      })
+    if (new Set(s.conversionSchedule.map((e) => e.age)).size !== s.conversionSchedule.length)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['conversionSchedule'],
+        message: 'Use each calendar age once in the conversion schedule.',
+      })
     if (s.birthDate > s.asOf)
       ctx.addIssue({
         code: 'custom',

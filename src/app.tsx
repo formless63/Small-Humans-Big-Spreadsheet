@@ -234,7 +234,12 @@ export function App() {
               selectedId={selected.id}
             />
             <Suspense fallback={<p role="status">Loading comparison charts…</p>}>
-              <Charts results={results} retirementAge={computedScenario.retirementAge} />
+              <Charts
+                results={results}
+                retirementAge={computedScenario.retirementAge}
+                scenario={computedScenario}
+                timing={plan.calculation?.transferTiming ?? []}
+              />
             </Suspense>
             <PlanningResults
               scenario={computedScenario}

@@ -4,6 +4,7 @@ import { currency } from '../lib/format'
 import { educationPresets, expenseKeys, presetById, strategyPresets } from '../scenarios/presets'
 import type { Scenario } from '../scenarios/schema'
 import { ExpandedInputs } from './ExpandedInputs'
+import { TransferInputs } from './TransferInputs'
 export function SourceLink({ id }: { id: string }) {
   const s = sourceById[id]
   return s ? (
@@ -419,71 +420,7 @@ export function Inputs({
         </section>
         <section>
           <h3>Roth conversions & rollovers</h3>
-          <div className="form-grid">
-            {select('conversionMode', 'Trump → Roth conversion', [
-              ['none', 'None'],
-              ['immediate', 'Full when growth period ends'],
-              ['afterSchool', 'Full after school'],
-              ['fixed', 'Fixed annual amount after school'],
-              ['threshold', 'Annual income-threshold fill after school'],
-              ['custom', 'Custom annual schedule'],
-            ])}
-            {select('conversionTaxPayer', 'Conversion tax payer', [
-              ['account', 'Withhold from Trump account'],
-              ['earnings', 'Child earnings (cash constrained)'],
-            ])}
-            {numeric('conversionAnnual', 'Fixed annual gross conversion', { step: 500 })}
-            {numeric('conversionThreshold', 'Annual income threshold (planning target)', {
-              step: 1000,
-            })}
-            <label className="field">
-              <span>
-                529 account opening date <small>You chose</small>
-              </span>
-              <input
-                type="date"
-                value={s.accountOpenedAt}
-                min={s.birthDate}
-                max={s.asOf}
-                onChange={(e) => update({ accountOpenedAt: e.target.value })}
-              />
-            </label>
-            {numeric('annualRothCapacity', 'Annual unused IRA capacity (capped by law)', {
-              step: 500,
-              source: 'SRC-IRS-PUB590A',
-            })}
-            {numeric('annualOtherIraContributions', 'Other annual IRA contributions', {
-              step: 500,
-            })}
-          </div>
-          {s.conversionMode === 'custom' && (
-            <label className="field">
-              <span>Schedule: age:amount, separated by commas</span>
-              <input
-                type="text"
-                placeholder="22:7500, 23:7500, 24:12000"
-                defaultValue={s.conversionSchedule.map((e) => `${e.age}:${e.amount}`).join(', ')}
-                onBlur={(e) => {
-                  const schedule = e.target.value
-                    .split(',')
-                    .filter((v) => v.trim())
-                    .map((v) => {
-                      const [age, amount] = v.split(':').map(Number)
-                      return { age, amount }
-                    })
-                  if (schedule.every((e) => Number.isFinite(e.age) && Number.isFinite(e.amount)))
-                    update({ conversionSchedule: schedule })
-                }}
-              />
-            </label>
-          )}
-          {check('rolloverEnabled', 'Enable eligible 529 → Roth rollovers after school')}
-          <p className="muted">
-            Tax always has a payer. Withholding can incur an early-distribution additional tax and
-            reduces assets reaching Roth. 529 rollovers enforce 15-year age, five-year lookback,
-            annual compensation/capacity, and $35,000 lifetime limits.{' '}
-            <SourceLink id="SRC-IRS-529-TOPIC313" />
-          </p>
+          <TransferInputs scenario={s} update={update} showTaxInputs={false} />
         </section>
         <section>
           <h3>Career saving (separate from childhood assets)</h3>

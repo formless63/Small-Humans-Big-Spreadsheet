@@ -1559,3 +1559,75 @@ footer > a {
     padding: 16px;
   }
 }
+
+.account-toggles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  border: 0;
+  padding: 12px 0;
+}
+.account-toggles legend {
+  font-weight: 600;
+  font-size: 13px;
+}
+.account-toggles .check {
+  margin: 0;
+  font-size: 12px;
+}
+.portfolio-year-control {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 24px;
+  margin: 24px 0;
+}
+.portfolio-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 18px;
+  padding: 20px 0;
+  border-block: 1px solid var(--border);
+}
+.portfolio-totals span {
+  display: block;
+  font-size: 12px;
+  line-height: 1.5;
+}
+.portfolio-totals strong {
+  display: block;
+  font-size: 22px;
+  margin-top: 6px;
+}
+.portfolio-panel .flow-explanation {
+  white-space: normal;
+  min-width: 210px;
+  line-height: 1.5;
+}
+.flow-explanation small {
+  display: block;
+  font-weight: 400;
+}
+.portfolio-panel details {
+  margin: 20px 0;
+}
+.transfer-inputs details {
+  margin: 18px 0;
+}
+@media (max-width: 600px) {
+  .portfolio-year-control {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .portfolio-panel .chart {
+    height: 380px;
+  }
+}
+
+.portfolio-panel caption {
+  color: #405b47;
+}
+
+.chart-horizon {
+  max-width: 400px;
+  margin: 12px 0;
+}

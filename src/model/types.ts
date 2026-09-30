@@ -37,6 +37,10 @@ export interface LedgerEvent {
   penalty?: string
   balance?: string
   payer?: string
+  grossExact?: string
+  taxExact?: string
+  penaltyExact?: string
+  taxFromAccountExact?: string
   sourceIds: string[]
   explanation: string
 }
@@ -88,6 +92,9 @@ export interface Withdrawal {
   net: Decimal
 }
 export interface SimulationResult {
+  portfolio: PortfolioSnapshot[]
+  portfolioYears: PortfolioYear[]
+  transfers: TransferAttempt[]
   id: string
   name: string
   ledger: LedgerEvent[]
@@ -163,4 +170,42 @@ export interface SimulationResult {
     planningTaxable: string
   }[]
   warnings: string[]
+}
+
+export type PortfolioAccount = VehicleId | 'career'
+export interface PortfolioSnapshot {
+  date: string
+  age: number
+  balances: Record<PortfolioAccount, string>
+  debt: string
+}
+export interface TransferAttempt {
+  date: string
+  age: number
+  from: 'trump' | '529'
+  gross: string
+  net: string
+  tax: string
+  penalty: string
+  taxable: string
+  earned: string
+  payer: string
+  reasons: string[]
+}
+export interface AccountYear {
+  account: PortfolioAccount
+  opening: string
+  contributions: string
+  growth: string
+  transfersIn: string
+  transfersOut: string
+  spending: string
+  tax: string
+  closing: string
+}
+export interface PortfolioYear {
+  year: number
+  age: number
+  accounts: AccountYear[]
+  debt: string
 }

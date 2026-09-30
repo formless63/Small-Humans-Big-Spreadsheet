@@ -53,3 +53,5 @@ Read [SPEC.md](SPEC.md) and [AGENTS.md](AGENTS.md) before architectural work. [M
 Every education month must reconcile within one cent. Legal facts carry source IDs; forecasts and effective tax rates are assumptions or user inputs. 2026 rules are reference illustrations, not predictions of future policy. Proposed IRS guidance is labeled separately from final guidance. The tax engine is simplified and supports manual effective rates for complex cases.
 
 Educational use only; not tax, legal, investment, lending, or financial advice.
+
+The guided **Move money later** step plans Trump-to-Roth conversions and eligible 529 rollovers. The selected-plan portfolio view shows individual account balances, drawdowns, transfer taxes and constraints, with a year selector and account toggles. Optional comparisons hold the deposit mix constant while changing transfer timing. See [the methodology](docs/methodology.md) for the source-account reserve and early-Roth modeling assumptions.

@@ -25,6 +25,7 @@ import {
   withdrawNet,
 } from '../vehicles/vehicle'
 import { D, Decimal, money, monthlyRate, nonnegative, serializeMoney as str } from './money'
+import { portfolioYears } from './portfolio'
 import { addMonths, ageAt, atAge, monthDate, pilotEligible, trumpAvailableFrom } from './timeline'
 
 export function simulateScenario(
@@ -52,6 +53,20 @@ export function simulateScenario(
     timeline: TimelinePoint[] = [],
     periods: FundingPeriod[] = [],
     loans: LoanState[] = []
+  const portfolio: SimulationResult['portfolio'] = [],
+    transfers: SimulationResult['transfers'] = []
+  const snapshot = (date: string) =>
+    portfolio.push({
+      date,
+      age: ageAt(date, s.birthDate),
+      balances: {
+        ...Object.fromEntries(
+          Object.entries(accounts).map(([id, a]) => [id, a.balance.toString()]),
+        ),
+        career: career.toString(),
+      } as SimulationResult['portfolio'][number]['balances'],
+      debt: loanBalance().toString(),
+    })
   const warnings = new Set<string>()
   const aidAssessment: SimulationResult['aidAssessment'] = []
   const iraWorksheets: SimulationResult['iraWorksheets'] = []
@@ -289,6 +304,7 @@ export function simulateScenario(
     warnings.add(
       '529 → Roth requires compensation, unused annual IRA capacity, account age over 15 years, five-year lookback, and $35,000 lifetime cap. Trustee-to-trustee transfer and same-beneficiary requirements are assumed.',
     )
+  snapshot(s.asOf)
   for (let date = start; date <= retirementDate; date = addMonths(date, 1)) {
     const age = ageAt(date, s.birthDate),
       y = Number(date.slice(0, 4))
@@ -316,6 +332,7 @@ export function simulateScenario(
       capturedGrad = true
     }
     if (date === retirementDate) {
+      snapshot(date)
       timeline.push({
         date,
         age,
@@ -883,6 +900,8 @@ export function simulateScenario(
             `Education ${key}: ${qualify ? 'qualified' : 'nonqualified'} withdrawal; ${str(w.net)} spendable after tax.`,
             {
               vehicleId: account.id,
+              taxExact: w.tax.plus(w.stateRecapture).toString(),
+              penaltyExact: w.penalty.toString(),
               basis: str(w.basis),
               taxable: str(w.taxable),
               tax: str(w.tax.plus(w.stateRecapture)),
@@ -1031,21 +1050,33 @@ export function simulateScenario(
       })
     }
     const annualEvent = date.endsWith('-01-01') || date === start
+    const calendarAge = y - Number(s.birthDate.slice(0, 4))
     const conversionDate =
       s.conversionMode === 'immediate' ? trumpAvailableFrom(s.birthDate) : educationEnd
+    const scheduledStart =
+      s.conversionStartAge === 0
+        ? educationEnd
+        : `${Number(s.birthDate.slice(0, 4)) + s.conversionStartAge}-01-01`
     const conversionDue =
       s.conversionMode !== 'none' &&
       date >= trumpAvailableFrom(s.birthDate) &&
+      calendarAge <= s.conversionEndAge &&
       ((['immediate', 'afterSchool'].includes(s.conversionMode) && date >= conversionDate) ||
         (['fixed', 'threshold', 'custom'].includes(s.conversionMode) &&
           annualEvent &&
-          date >= educationEnd))
+          (s.conversionMode === 'custom'
+            ? s.conversionSchedule.some((e) => e.age === calendarAge)
+            : date >= scheduledStart)))
     if (conversionDue && accounts.trump.balance.gt(0)) {
+      const reasons: string[] = []
       let requested = accounts.trump.balance
       if (s.conversionMode === 'fixed') requested = D(s.conversionAnnual)
       if (s.conversionMode === 'threshold') {
         const targetTaxable = nonnegative(
-          D(s.conversionThreshold).minus(annualSalary).minus(unearned),
+          D(s.conversionThreshold)
+            .minus(yearlyEarned(date))
+            .minus(s.otherUnearnedIncome)
+            .minus(unearned),
         )
         const earningsRatio = accounts.trump.balance.isZero()
           ? D(0)
@@ -1054,9 +1085,19 @@ export function simulateScenario(
       }
       if (s.conversionMode === 'custom')
         requested = s.conversionSchedule
-          .filter((e) => e.age === Math.floor(age))
+          .filter((e) => e.age === calendarAge)
           .reduce((a, e) => a.plus(e.amount), D(0))
-      requested = Decimal.min(requested, accounts.trump.balance)
+      if (requested.lte(0)) reasons.push('No room below the chosen income target.')
+      const availableForConversion = nonnegative(
+        accounts.trump.balance.minus(s.transferEducationReserve),
+      )
+      if (requested.gt(availableForConversion))
+        reasons.push(
+          s.transferEducationReserve > 0
+            ? 'Source-account education reserve or available balance.'
+            : 'Available Trump balance.',
+        )
+      requested = Decimal.min(requested, availableForConversion)
       const ctx = { ...taxContext(date, true) },
         ratio = accounts.trump.balance.isZero()
           ? D(0)
@@ -1074,6 +1115,7 @@ export function simulateScenario(
             else lo = mid
           }
           requested = lo
+          reasons.push('Available child earnings cannot fund all conversion tax.')
           warnings.add(
             'Conversion limited by explicit child earnings available for tax; parents supply no additional tax payment.',
           )
@@ -1099,6 +1141,20 @@ export function simulateScenario(
         converted = converted.plus(toRoth)
         conversionTaxes = conversionTaxes.plus(tax)
         penalties = penalties.plus(withholdingPenalty)
+        transfers.push({
+          date,
+          age,
+          from: 'trump',
+          gross: requested.toString(),
+          net: toRoth.toString(),
+          tax: tax.toString(),
+          penalty: withholdingPenalty.toString(),
+          taxable: requested.minus(basis).toString(),
+          earned: yearlyEarned(date).toString(),
+          payer:
+            s.conversionTaxPayer === 'account' ? 'Trump account withholding' : 'child earnings',
+          reasons,
+        })
         log(
           date,
           'conversion',
@@ -1106,6 +1162,10 @@ export function simulateScenario(
           `Trump → Roth: ${str(requested)} removed, ${str(basis)} basis, ${str(requested.minus(basis))} taxable, ${str(tax)} tax, ${str(withholdingPenalty)} withholding penalty, ${str(toRoth)} reaches Roth.`,
           {
             vehicleId: 'roth',
+            grossExact: requested.toString(),
+            taxExact: tax.toString(),
+            penaltyExact: withholdingPenalty.toString(),
+            taxFromAccountExact: withheld.toString(),
             basis: str(basis),
             taxable: str(requested.minus(basis)),
             tax: str(tax),
@@ -1120,13 +1180,30 @@ export function simulateScenario(
           warnings.add(
             'Conversion occurs during a potentially Form 8615 kiddie-tax year. Manual rates must reflect the parent/support/student situation; estimate mode is simplified.',
           )
-      }
+      } else
+        transfers.push({
+          date,
+          age,
+          from: 'trump',
+          gross: '0',
+          net: '0',
+          tax: '0',
+          penalty: '0',
+          taxable: '0',
+          earned: yearlyEarned(date).toString(),
+          payer:
+            s.conversionTaxPayer === 'account' ? 'Trump account withholding' : 'child earnings',
+          reasons,
+        })
     }
     if (
       s.rolloverEnabled &&
       annualEvent &&
-      date >= educationEnd &&
-      date > addMonths(s.accountOpenedAt, 15 * 12)
+      accounts['529'].balance.gt(0) &&
+      date >=
+        (s.rolloverStartAge === 0
+          ? educationEnd
+          : `${Number(s.birthDate.slice(0, 4)) + s.rolloverStartAge}-01-01`)
     ) {
       const cutoff = addMonths(date, -5 * 12)
       const eligibleLots = accounts['529'].lots.filter((lot) => lot.date < cutoff)
@@ -1140,14 +1217,42 @@ export function simulateScenario(
           .minus(s.annualOtherIraContributions)
           .minus(rothYearUsed),
       )
-      const compensation = nonnegative(yearlyEarned(date).minus(s.annualOtherIraContributions))
+      const compensation = nonnegative(
+        yearlyEarned(date).minus(s.annualOtherIraContributions).minus(rothYearUsed),
+      )
+      const reasons: string[] = []
+      const oldEnough = date > addMonths(s.accountOpenedAt, 15 * 12)
+      const available = nonnegative(accounts['529'].balance.minus(s.transferEducationReserve))
+      const lifetime = nonnegative(D(ira.rolloverLifetimeCap.value).minus(rolled))
+      if (!oldEnough) reasons.push('529 account must be open more than 15 years.')
+      if (eligibleValue.lt(accounts['529'].balance))
+        reasons.push('Five-year contribution and earnings lookback.')
+      if (compensation.lte(remainingAnnual))
+        reasons.push('Eligible earned compensation after other IRA contributions.')
+      if (remainingAnnual.lte(compensation))
+        reasons.push('Unused annual IRA capacity / statutory annual cap.')
+      if (lifetime.lt(available)) reasons.push('Remaining $35,000 lifetime rollover allowance.')
+      if (s.transferEducationReserve > 0) reasons.push('Source-account education reserve.')
       const amount = Decimal.min(
-        accounts['529'].balance,
+        oldEnough ? available : D(0),
         eligibleValue,
         nonnegative(D(ira.rolloverLifetimeCap.value).minus(rolled)),
         remainingAnnual,
         compensation,
       )
+      transfers.push({
+        date,
+        age,
+        from: '529',
+        gross: amount.toString(),
+        net: amount.toString(),
+        tax: '0',
+        penalty: '0',
+        taxable: '0',
+        earned: yearlyEarned(date).toString(),
+        payer: '529 direct transfer',
+        reasons,
+      })
       if (amount.gt(0)) {
         // Remove from eligible dated lots only, preserving the five-year exclusion.
         const fraction = amount.div(eligibleValue)
@@ -1232,6 +1337,7 @@ export function simulateScenario(
           { vehicleId: 'career', payer: 'child earnings', balance: str(career) },
         )
     }
+    snapshot(date)
     timeline.push({
       date,
       age,
@@ -1384,6 +1490,9 @@ export function simulateScenario(
     name,
     ledger,
     timeline,
+    portfolio,
+    portfolioYears: portfolioYears(portfolio, ledger),
+    transfers,
     contributions: {
       parent: str(parent),
       thirdParty: str(thirdParty),

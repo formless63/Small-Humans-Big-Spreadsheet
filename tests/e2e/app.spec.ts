@@ -153,6 +153,7 @@ test('guided questions narrow choices and keep detailed controls on the same pag
   ).toHaveCount(0)
   await page.getByRole('button', { name: 'Cash / savings / CDs', exact: false }).click()
   await page.getByRole('button', { name: 'Continue', exact: true }).click()
+  await page.getByRole('button', { name: 'Continue', exact: true }).click()
   await page.getByRole('button', { name: 'Show my comparison', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Your comparison is ready.' })).toBeVisible()
   await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
@@ -235,4 +236,56 @@ test('the math ledger follows the selected plan until an explicit reference is c
   await expect(
     page.getByRole('table', { name: '529 plan: monthly calculation ledger' }),
   ).toBeVisible()
+})
+
+test('guided transfers, account makeup, year inspection and timing comparison share the same plan', async ({
+  page,
+}) => {
+  const errors: string[] = []
+  page.on('pageerror', (e) => errors.push(e.message))
+  await page.goto('./')
+  await expect(
+    page.getByRole('heading', { name: 'Where the money lives—and where it goes' }),
+  ).toBeVisible({ timeout: 15000 })
+  await page.getByRole('button', { name: 'Move money later', exact: false }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Would you like to move savings into Roth later?' }),
+  ).toBeVisible()
+  await page.getByLabel('Trump → Roth conversion').selectOption('custom')
+  await page.getByRole('button', { name: 'Add conversion year' }).click()
+  await page.getByLabel('Gross amount', { exact: true }).fill('5000')
+  await page.getByLabel('Enable eligible 529 → Roth rollovers', { exact: true }).check()
+  await page.getByLabel('Start 529 rollover attempts at calendar age (0 = after school)').fill('18')
+  await page.getByLabel('Compare transfer timing with the same starting mix').check()
+  await expect(
+    page.getByRole('table', { name: 'Transfer timing comparison for the selected mix' }),
+  ).toContainText('Spread Trump conversions from age 18', { timeout: 20000 })
+  await page.getByLabel('Inspect calendar year').selectOption('2042')
+  await expect(
+    page.getByRole('table', { name: '2042: transfers and eligibility checks' }),
+  ).toContainText('Trump → Roth')
+  await expect(
+    page.getByRole('table', { name: '2042: transfers and eligibility checks' }),
+  ).toContainText('compensation')
+  const table = page.getByRole('table', { name: '2042: account balances and flows' })
+  await expect(table).toContainText('Roth from transfers')
+  const before = await table.textContent()
+  await page.getByRole('checkbox', { name: 'Trump / traditional IRA', exact: true }).uncheck()
+  await expect(table).toHaveText(before!)
+  await page.getByText('Annual money flows and account balances', { exact: true }).click()
+  await expect(page.getByRole('table', { name: 'Annual portfolio flow totals' })).toBeVisible()
+  await page.getByRole('button', { name: 'Inspect year 2043', exact: true }).click()
+  await expect(page.getByLabel('Inspect calendar year')).toHaveValue('2043')
+  await page.getByRole('button', { name: 'Copy scenario link' }).click()
+  const saved = await page.locator('.big-number').allTextContents()
+  await page.goto(page.url())
+  await expect(page.locator('.big-number')).toHaveText(saved)
+  await page.getByRole('button', { name: 'Move money later', exact: false }).click()
+  await expect(page.getByLabel('Trump → Roth conversion')).toHaveValue('custom')
+  await expect(page.getByLabel('Gross amount', { exact: true })).toHaveValue('5000')
+  await page.getByRole('button', { name: 'Edit all assumptions', exact: true }).click()
+  await page.getByText('Advanced assumptions', { exact: false }).first().click()
+  await expect(page.getByLabel('Trump → Roth conversion')).toHaveValue('custom')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
+  expect(errors).toEqual([])
 })
