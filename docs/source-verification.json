@@ -1,0 +1,140 @@
+[
+  {
+    "document": "4547",
+    "checkedAt": "2026-09-30",
+    "bytes": 28678,
+    "sha256": "0d582b807942ef1ddf4000a6dfb05369cad1752e7e96b17cc7e4175eb71f0878"
+  },
+  {
+    "document": "2025-52",
+    "checkedAt": "2026-09-30",
+    "bytes": 171947,
+    "sha256": "1e2f9b24e3ad4363849b2bc447c507c3efdf54b7fe9549ed57dc5752db37eb05"
+  },
+  {
+    "document": "2026-37",
+    "checkedAt": "2026-09-30",
+    "bytes": 440268,
+    "sha256": "eaf3b6a705f80510ee0ad4e3c0ebd1a17a3e2cf266244c55fe587855c99aaaaf"
+  },
+  {
+    "document": "2026-38",
+    "checkedAt": "2026-09-30",
+    "bytes": 379503,
+    "sha256": "feb846738294ed64c8135e21b71913efa81e0fb1bf23e278f347694b66dc0bac"
+  },
+  {
+    "document": "590a",
+    "checkedAt": "2026-09-30",
+    "bytes": 265288,
+    "sha256": "efebc4e490afd13110cf5becda6408e725861977cfad10138da1e683e67e7aea"
+  },
+  {
+    "document": "590b",
+    "checkedAt": "2026-09-30",
+    "bytes": 265072,
+    "sha256": "b60dfb3f3bd9cfa3011a2310f4fe3675549f72b9b839fa847977831e7a4f3aad"
+  },
+  {
+    "document": "8606",
+    "checkedAt": "2026-09-30",
+    "bytes": 109134,
+    "sha256": "a4930f9785ea8ca6d4d227e51f424e08941ee06ca619f578ab22eec5353875c8"
+  },
+  {
+    "document": "557",
+    "checkedAt": "2026-09-30",
+    "bytes": 9804,
+    "sha256": "d9db42e3cf73f2944a0cfaecb049e3638aa57c0911ada71650dc0dbd45524360"
+  },
+  {
+    "document": "8615",
+    "checkedAt": "2026-09-30",
+    "bytes": 59514,
+    "sha256": "16daeff0db36e60ddbf493c988a6ec67d8db6ccb5657e8e8bca8d1b31ae8c4e4"
+  },
+  {
+    "document": "970",
+    "checkedAt": "2026-09-30",
+    "bytes": 382713,
+    "sha256": "ea645cda701b1ae7a4f99b5833551803ea2a27ba394bdb1f5332c26dadcb946e"
+  },
+  {
+    "document": "529",
+    "checkedAt": "2026-09-30",
+    "bytes": 10009,
+    "sha256": "624d7654b844bc075c4d121202b646c9f34211109fd3473baa3ca9a6e66bb3c1"
+  },
+  {
+    "document": "ny201",
+    "checkedAt": "2026-09-30",
+    "bytes": 257719,
+    "sha256": "e2436bdce16a10e8c5f2e57e014753bf794def7580345a40a2d311f3f0a7e40b"
+  },
+  {
+    "document": "ny225",
+    "checkedAt": "2026-09-30",
+    "bytes": 145563,
+    "sha256": "a536603d330d3ed7cb005555b0c1bd4e1ae48673f40827b8f3426c73abbb9d46"
+  },
+  {
+    "document": "rates-confirmed",
+    "checkedAt": "2026-09-30",
+    "bytes": 3000,
+    "sha256": "66d27db61777ec0e1b674393009856d8f2ef6d791fcbe310d9e7b81050e80ac0"
+  },
+  {
+    "document": "handbook2025",
+    "checkedAt": "2026-09-30",
+    "bytes": 54484,
+    "sha256": "4bcb38f062c2a4b836a1e0fae16aeaceae4102e4fa3ddda58a930da0075efef7"
+  },
+  {
+    "document": "handbook1",
+    "checkedAt": "2026-09-30",
+    "bytes": 39705,
+    "sha256": "0908d749ad079f4ea93301aa17c52b5d2af2b092bca6a7d7ae35f4f53ec7adb4"
+  },
+  {
+    "document": "college",
+    "checkedAt": "2026-09-30",
+    "bytes": 1773,
+    "sha256": "797e5dad882a78d7a4bd88105d0b3be9181ce7450f0d5318aba6c1a487d89325"
+  },
+  {
+    "document": "bls",
+    "checkedAt": "2026-09-30",
+    "bytes": 7074,
+    "sha256": "43f2bb8b355ee93e4f85d19571f101c4637aed7ebc159947c607a0cfaaceeca8"
+  },
+  {
+    "document": "electrician",
+    "checkedAt": "2026-09-30",
+    "bytes": 29020,
+    "sha256": "460857c187cd42951f296e6bdfdd988432ff9e0312b9e8df6bef9295bb3da531"
+  },
+  {
+    "document": "hvac",
+    "checkedAt": "2026-09-30",
+    "bytes": 28251,
+    "sha256": "2a34ac06d38c9ebcb5a37b4665929a5d4e04220cdf7d4984753baf215027d309"
+  },
+  {
+    "document": "harvard",
+    "checkedAt": "2026-09-30",
+    "bytes": 14864,
+    "sha256": "5846c1857f5c628bb6db0231d17edd188c4564c9da76708c2f28d19e4a0bd17e"
+  },
+  {
+    "document": "yale",
+    "checkedAt": "2026-09-30",
+    "bytes": 5676,
+    "sha256": "665582600910f79e3320b503dcedc2da5fac7ba7b7e3754a417ce047f18d39be"
+  },
+  {
+    "document": "vite",
+    "checkedAt": "2026-09-30",
+    "bytes": 13824,
+    "sha256": "32d2210e347dc97f17f7280a71d27a0d663f8646637845c834350ea5f27ae948"
+  }
+]

@@ -1,183 +1,55 @@
-Welcome to your new TanStack Start app!
+# Small Humans, Big Spreadsheet
 
-# Getting Started
+A private, static financial calculator that traces childhood contributions through education, taxes, loans, Roth strategies and retirement. Compare a 529, Trump Account, and editable split without unexplained funding.
 
-To run this application:
+## Develop
 
-```bash
-npm install
-npm run dev
+Use Node 24 LTS and **Bun 1.4.2**. Bun is the required package manager; commit `bun.lock`.
+
+```sh
+bun install --frozen-lockfile
+bun run dev
 ```
 
-# Building For Production
+The application runs on port 3000. There is no backend, account, database, analytics, or remote scenario storage. Source links are optional external navigation; all calculations work offline after static assets load.
 
-To build this application for production:
+## Validate
 
-```bash
-npm run build
+```sh
+bun run lint
+bun run typecheck
+bun run test
+bun run build
+bun x playwright install --with-deps chromium
+bun run test:e2e
 ```
 
-## Styling
+`bun run check` runs the whole sequence after Chromium is installed. Browser tests cover desktop/mobile, preset changes, funding gaps, controls, source links, the ledger, URL round trips, and invalid input handling.
 
-This project uses [Tailwind CSS](https://tailwindcss.com/) for styling.
+## GitHub Pages
 
-### Removing Tailwind CSS
+The Actions CI workflow validates the application with the actual repository base path, builds static assets, runs browser tests, and uploads a Pages artifact. A second workflow deploys the exact artifact only after CI passes on `main`; it does not rebuild a different commit.
 
-If you prefer not to use Tailwind CSS:
+Configure the repository's **Settings → Pages → Source → GitHub Actions** if Pages is not already enabled. The deployment workflow attempts enablement with the available token; an administrator may need to set it once.
 
-1. Remove the demo pages in `src/routes/demo/`
-2. Replace the Tailwind import in `src/styles.css` with your own styles
-3. Remove `tailwindcss()` from the plugins array in `vite.config.ts`
-4. Remove `@tailwindcss/vite` and `tailwindcss` from `package.json`
-
-
-
-## Routing
-
-This project uses [TanStack Router](https://tanstack.com/router) with file-based routing. Routes are managed as files in `src/routes`.
-
-### Adding A Route
-
-To add a new route to your application just add a new file in the `./src/routes` directory.
-
-TanStack will automatically generate the content of the route file for you.
-
-Now that you have two routes you can use a `Link` component to navigate between them.
-
-### Adding Links
-
-To use SPA (Single Page Application) navigation you will need to import the `Link` component from `@tanstack/react-router`.
-
-```tsx
-import { Link } from "@tanstack/react-router";
+```sh
+PAGES_BASE=/Small-Humans-Big-Spreadsheet/ bun run build
+PAGES_BASE=/Small-Humans-Big-Spreadsheet/ bun run test:e2e
 ```
 
-Then anywhere in your JSX you can use it like so:
+GitHub project Pages are case-sensitive: the configured base matches this repository's actual name. Root hosting uses the default `/` base. Scenarios use versioned query parameters, so no server-side route fallback is needed.
 
-```tsx
-<Link to="/about">About</Link>
-```
+## Model and data
 
-This will create a link that will navigate to the `/about` route.
+Read [SPEC.md](SPEC.md) and [AGENTS.md](AGENTS.md) before architectural work. [Methodology](docs/methodology.md) documents the monthly calendar, rounding, qualification, basis, funding, loans and tax approximations. [Sources](docs/sources.md) records primary-source verification and versions.
 
-More information on the `Link` component can be found in the [Link documentation](https://tanstack.com/router/v1/docs/framework/react/api/router/linkComponent).
+- `src/model`: React-independent Decimal engine, vehicle registry, taxes and loan tranches.
+- `src/data`: source/provenance registry and versioned federal, NY, education and earnings data.
+- `src/scenarios`: Zod inputs, editable presets and contribution splits.
+- `src/components`: accessible charts, tables, ledger, controls and methodology.
+- `tests/model`: source and financial invariants.
+- `tests/regression`: named deterministic fixtures. Explain numerical changes; do not blindly regenerate.
 
-### Using A Layout
+Every education month must reconcile within one cent. Legal facts carry source IDs; forecasts and effective tax rates are assumptions or user inputs. 2026 rules are reference illustrations, not predictions of future policy. Proposed IRS guidance is labeled separately from final guidance. The tax engine is simplified and supports manual effective rates for complex cases.
 
-In the File Based Routing setup the layout is located in `src/routes/__root.tsx`. Anything you add to the root route will appear in all the routes. The route content will appear in the JSX where you render `{children}` in the `shellComponent`.
-
-Here is an example layout that includes a header:
-
-```tsx
-import { HeadContent, Scripts, createRootRoute } from '@tanstack/react-router'
-
-export const Route = createRootRoute({
-  head: () => ({
-    meta: [
-      { charSet: 'utf-8' },
-      { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-      { title: 'My App' },
-    ],
-  }),
-  shellComponent: ({ children }) => (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        <header>
-          <nav>
-            <Link to="/">Home</Link>
-            <Link to="/about">About</Link>
-          </nav>
-        </header>
-        {children}
-        <Scripts />
-      </body>
-    </html>
-  ),
-})
-```
-
-More information on layouts can be found in the [Layouts documentation](https://tanstack.com/router/latest/docs/framework/react/guide/routing-concepts#layouts).
-
-## Server Functions
-
-TanStack Start provides server functions that allow you to write server-side code that seamlessly integrates with your client components.
-
-```tsx
-import { createServerFn } from '@tanstack/react-start'
-
-const getServerTime = createServerFn({
-  method: 'GET',
-}).handler(async () => {
-  return new Date().toISOString()
-})
-
-// Use in a component
-function MyComponent() {
-  const [time, setTime] = useState('')
-  
-  useEffect(() => {
-    getServerTime().then(setTime)
-  }, [])
-  
-  return <div>Server time: {time}</div>
-}
-```
-
-## API Routes
-
-You can create API routes by using the `server` property in your route definitions:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-import { json } from '@tanstack/react-start'
-
-export const Route = createFileRoute('/api/hello')({
-  server: {
-    handlers: {
-      GET: () => json({ message: 'Hello, World!' }),
-    },
-  },
-})
-```
-
-## Data Fetching
-
-There are multiple ways to fetch data in your application. You can use TanStack Query to fetch data from a server. But you can also use the `loader` functionality built into TanStack Router to load the data for a route before it's rendered.
-
-For example:
-
-```tsx
-import { createFileRoute } from '@tanstack/react-router'
-
-export const Route = createFileRoute('/people')({
-  loader: async () => {
-    const response = await fetch('https://swapi.dev/api/people')
-    return response.json()
-  },
-  component: PeopleComponent,
-})
-
-function PeopleComponent() {
-  const data = Route.useLoaderData()
-  return (
-    <ul>
-      {data.results.map((person) => (
-        <li key={person.name}>{person.name}</li>
-      ))}
-    </ul>
-  )
-}
-```
-
-Loaders simplify your data fetching logic dramatically. Check out more information in the [Loader documentation](https://tanstack.com/router/latest/docs/framework/react/guide/data-loading#loader-parameters).
-
-
-
-# Learn More
-
-You can learn more about all of the offerings from TanStack in the [TanStack documentation](https://tanstack.com).
-
-For TanStack Start specific documentation, visit [TanStack Start](https://tanstack.com/start).
+Educational use only; not tax, legal, investment, lending, or financial advice.

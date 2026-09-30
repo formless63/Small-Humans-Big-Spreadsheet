@@ -164,7 +164,7 @@ Use current stable mutually compatible versions at implementation time.
 
 Prefer Node.js 24 LTS or the current active LTS if that changes before implementation.
 
-Use `pnpm` unless an existing repository convention requires otherwise.
+Use **Bun** for dependency installation, scripts, and the lockfile. Commit `bun.lock` and use `bun install --frozen-lockfile` in CI.
 
 ## Formatting / linting
 

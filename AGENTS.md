@@ -154,7 +154,7 @@ Avoid prereleases.
 
 Use Node current active LTS, preferably Node 24 while it remains appropriate.
 
-Use pnpm unless the repository already establishes another package manager.
+Use Bun for dependency installation, scripts, and the lockfile. Commit `bun.lock` and use `bun install --frozen-lockfile` in CI.
 
 ---
 
